@@ -216,3 +216,16 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Claude Code / spec-kit
+#   Commit shared project config (settings.json, commands/, agents/, hooks/) and
+#   the .specify/ directory. Keep local overrides and the spec-kit toolchain out:
+#   each contributor installs spec-kit themselves.
+.claude/settings.local.json
+.claude/skills/
+
+# Secrets (per constitution: Secret Protection)
+#   Real config with OAuth client_id/client_secret and FHIR server credentials.
+#   config.example.json is the committed template; config.json is never committed.
+config.json
+*.secret*

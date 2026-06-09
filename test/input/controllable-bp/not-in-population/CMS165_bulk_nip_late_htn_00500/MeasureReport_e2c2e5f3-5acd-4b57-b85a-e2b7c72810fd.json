@@ -1,0 +1,670 @@
+{
+  "resourceType": "MeasureReport",
+  "id": "e2c2e5f3-5acd-4b57-b85a-e2b7c72810fd",
+  "contained": [ {
+    "resourceType": "Observation",
+    "id": "086bc0df-ac85-4623-a849-3bb4a161a781",
+    "extension": [ {
+      "url": "http://hl7.org/fhir/StructureDefinition/cqf-measureInfo",
+      "extension": [ {
+        "url": "measure",
+        "valueCanonical": "http://fhir.org/guides/cqf/aphl/chronic-ds/Measure/ControllingHighBloodPressureFHIR"
+      } ]
+    } ],
+    "status": "final",
+    "code": {
+      "coding": [ {
+        "system": "http://terminology.hl7.org/CodeSystem/measure-data-usage",
+        "code": "supplemental-data"
+      }, {
+        "system": "http://loinc.org",
+        "code": "54133-4",
+        "display": "Ethnicity"
+      } ]
+    },
+    "valueCodeableConcept": {
+      "coding": [ {
+        "code": "2135-2"
+      } ]
+    }
+  }, {
+    "resourceType": "Observation",
+    "id": "7a644cf2-098e-4512-83d8-e930005a640a",
+    "extension": [ {
+      "url": "http://hl7.org/fhir/StructureDefinition/cqf-measureInfo",
+      "extension": [ {
+        "url": "measure",
+        "valueCanonical": "http://fhir.org/guides/cqf/aphl/chronic-ds/Measure/ControllingHighBloodPressureFHIR"
+      } ]
+    } ],
+    "status": "final",
+    "code": {
+      "coding": [ {
+        "system": "http://terminology.hl7.org/CodeSystem/measure-data-usage",
+        "code": "supplemental-data"
+      }, {
+        "system": "http://loinc.org",
+        "code": "30525-0",
+        "display": "Age"
+      } ]
+    },
+    "valueCodeableConcept": {
+      "coding": [ {
+        "code": "55"
+      } ]
+    }
+  }, {
+    "resourceType": "Observation",
+    "id": "b413650c-5cc6-41d7-a4c0-688bd780b4b7",
+    "extension": [ {
+      "url": "http://hl7.org/fhir/StructureDefinition/cqf-measureInfo",
+      "extension": [ {
+        "url": "measure",
+        "valueCanonical": "http://fhir.org/guides/cqf/aphl/chronic-ds/Measure/ControllingHighBloodPressureFHIR"
+      } ]
+    } ],
+    "status": "final",
+    "code": {
+      "coding": [ {
+        "system": "http://terminology.hl7.org/CodeSystem/measure-data-usage",
+        "code": "supplemental-data"
+      }, {
+        "system": "http://loinc.org",
+        "code": "32624-9",
+        "display": "SDE Race"
+      } ]
+    },
+    "valueCodeableConcept": {
+      "coding": [ {
+        "code": "2076-8"
+      } ]
+    }
+  }, {
+    "resourceType": "Observation",
+    "id": "b3f926e8-7960-4afb-89d3-fcea5e8a8771",
+    "extension": [ {
+      "url": "http://hl7.org/fhir/StructureDefinition/cqf-measureInfo",
+      "extension": [ {
+        "url": "measure",
+        "valueCanonical": "http://fhir.org/guides/cqf/aphl/chronic-ds/Measure/ControllingHighBloodPressureFHIR"
+      } ]
+    } ],
+    "status": "final",
+    "code": {
+      "coding": [ {
+        "system": "http://terminology.hl7.org/CodeSystem/measure-data-usage",
+        "code": "supplemental-data"
+      }, {
+        "system": "http://loinc.org",
+        "code": "72143-1",
+        "display": "Sex [HL7.v3]"
+      } ]
+    },
+    "valueCodeableConcept": {
+      "coding": [ {
+        "code": "F"
+      } ]
+    }
+  } ],
+  "extension": [ {
+    "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+    "valueString": "Percentage of patients 18-85 years of age who had a diagnosis of essential hypertension starting before and continuing into, or starting during the first six months of the measurement period, and whose most recent blood pressure was adequately controlled (<140/90 mmHg) during the measurement period"
+  }, {
+    "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.supplementalDataElement.reference",
+    "valueReference": {
+      "extension": [ {
+        "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+        "valueString": "sde-sex"
+      } ],
+      "reference": "#b3f926e8-7960-4afb-89d3-fcea5e8a8771"
+    }
+  }, {
+    "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.supplementalDataElement.reference",
+    "valueReference": {
+      "extension": [ {
+        "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+        "valueString": "sde-ethnicity"
+      } ],
+      "reference": "#086bc0df-ac85-4623-a849-3bb4a161a781"
+    }
+  }, {
+    "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.supplementalDataElement.reference",
+    "valueReference": {
+      "extension": [ {
+        "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+        "valueString": "sde-race"
+      } ],
+      "reference": "#b413650c-5cc6-41d7-a4c0-688bd780b4b7"
+    }
+  }, {
+    "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.supplementalDataElement.reference",
+    "valueReference": {
+      "extension": [ {
+        "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+        "valueString": "sde-age"
+      } ],
+      "reference": "#7a644cf2-098e-4512-83d8-e930005a640a"
+    }
+  } ],
+  "status": "complete",
+  "type": "individual",
+  "measure": "http://fhir.org/guides/cqf/aphl/chronic-ds/Measure/ControllingHighBloodPressureFHIR|0.0.002",
+  "subject": {
+    "reference": "Patient/dcb68a8a-108d-4711-8b2b-ffc0b575269a"
+  },
+  "date": "2026-05-23T19:22:42+00:00",
+  "period": {
+    "start": "2025-01-01T06:00:00+00:00",
+    "end": "2027-01-01T07:59:00+00:00"
+  },
+  "improvementNotation": {
+    "coding": [ {
+      "system": "http://terminology.hl7.org/CodeSystem/measure-improvement-notation",
+      "code": "decrease",
+      "display": "Lower score indicates better quality"
+    } ]
+  },
+  "group": [ {
+    "population": [ {
+      "id": "F348D767-1BDE-41AB-884D-5F0E19093980",
+      "extension": [ {
+        "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+        "valueString": "Patients 18-85 years of age who had a visit during the measurement period and diagnosis of essential hypertension"
+      } ],
+      "code": {
+        "coding": [ {
+          "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+          "code": "initial-population",
+          "display": "Initial Population"
+        } ]
+      },
+      "count": 0
+    }, {
+      "id": "3E0D40B3-64FC-4998-B371-34978D033116",
+      "extension": [ {
+        "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+        "valueString": "Patients 18-85 years of age who had a visit during the measurement period and diagnosis of essential hypertension"
+      } ],
+      "code": {
+        "coding": [ {
+          "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+          "code": "denominator",
+          "display": "Denominator"
+        } ]
+      },
+      "count": 0
+    }, {
+      "id": "24803F44-C643-45C7-A2A5-4C58BD540579",
+      "extension": [ {
+        "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+        "valueString": "Patients whose most recent blood pressure is adequately controlled (systolic blood pressure < 140 mmHg and diastolic blood pressure < 90 mmHg) during the measurement period"
+      } ],
+      "code": {
+        "coding": [ {
+          "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+          "code": "numerator",
+          "display": "Numerator"
+        } ]
+      },
+      "count": 0
+    }, {
+      "id": "95E1480E-8B61-4777-865D-B2A1D6525E1A",
+      "extension": [ {
+        "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+        "valueString": "Patients with ESRD or dialysis or renal transplant or pregnancy or in hospice or 66+ in nursing care or 66-80 with frailty and advanced illness or 81+ with frailty or receiving palliative care"
+      } ],
+      "code": {
+        "coding": [ {
+          "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+          "code": "denominator-exclusion",
+          "display": "Denominator Exclusions"
+        } ]
+      },
+      "count": 0
+    } ],
+    "stratifier": [ {
+      "id": "stratifier-ethnicity",
+      "extension": [ {
+        "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+        "valueString": "Ethnicity (CDC Value Set)"
+      } ],
+      "code": [ {
+        "coding": [ {
+          "system": "http://loinc.org",
+          "code": "54133-4",
+          "display": "Ethnicity"
+        } ]
+      } ],
+      "stratum": [ {
+        "value": {
+          "text": "2135-2"
+        },
+        "population": [ {
+          "id": "F348D767-1BDE-41AB-884D-5F0E19093980",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients 18-85 years of age who had a visit during the measurement period and diagnosis of essential hypertension"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "initial-population",
+              "display": "Initial Population"
+            } ]
+          },
+          "count": 0
+        }, {
+          "id": "3E0D40B3-64FC-4998-B371-34978D033116",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients 18-85 years of age who had a visit during the measurement period and diagnosis of essential hypertension"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "denominator",
+              "display": "Denominator"
+            } ]
+          },
+          "count": 0
+        }, {
+          "id": "24803F44-C643-45C7-A2A5-4C58BD540579",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients whose most recent blood pressure is adequately controlled (systolic blood pressure < 140 mmHg and diastolic blood pressure < 90 mmHg) during the measurement period"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "numerator",
+              "display": "Numerator"
+            } ]
+          },
+          "count": 0
+        }, {
+          "id": "95E1480E-8B61-4777-865D-B2A1D6525E1A",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients with ESRD or dialysis or renal transplant or pregnancy or in hospice or 66+ in nursing care or 66-80 with frailty and advanced illness or 81+ with frailty or receiving palliative care"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "denominator-exclusion",
+              "display": "Denominator Exclusions"
+            } ]
+          },
+          "count": 0
+        } ]
+      } ]
+    }, {
+      "id": "stratifier-payer",
+      "extension": [ {
+        "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+        "valueString": "Payer"
+      } ],
+      "code": [ {
+        "coding": [ {
+          "system": "http://terminology.hl7.org/CodeSystem/coverage-class",
+          "code": "plan",
+          "display": "SDE Payer"
+        } ]
+      } ],
+      "stratum": [ {
+        "population": [ {
+          "id": "F348D767-1BDE-41AB-884D-5F0E19093980",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients 18-85 years of age who had a visit during the measurement period and diagnosis of essential hypertension"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "initial-population",
+              "display": "Initial Population"
+            } ]
+          },
+          "count": 0
+        }, {
+          "id": "3E0D40B3-64FC-4998-B371-34978D033116",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients 18-85 years of age who had a visit during the measurement period and diagnosis of essential hypertension"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "denominator",
+              "display": "Denominator"
+            } ]
+          },
+          "count": 0
+        }, {
+          "id": "24803F44-C643-45C7-A2A5-4C58BD540579",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients whose most recent blood pressure is adequately controlled (systolic blood pressure < 140 mmHg and diastolic blood pressure < 90 mmHg) during the measurement period"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "numerator",
+              "display": "Numerator"
+            } ]
+          },
+          "count": 0
+        }, {
+          "id": "95E1480E-8B61-4777-865D-B2A1D6525E1A",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients with ESRD or dialysis or renal transplant or pregnancy or in hospice or 66+ in nursing care or 66-80 with frailty and advanced illness or 81+ with frailty or receiving palliative care"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "denominator-exclusion",
+              "display": "Denominator Exclusions"
+            } ]
+          },
+          "count": 0
+        } ]
+      } ]
+    }, {
+      "id": "stratifier-race",
+      "extension": [ {
+        "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+        "valueString": "Race (CDC Value Set)"
+      } ],
+      "code": [ {
+        "coding": [ {
+          "system": "http://loinc.org",
+          "code": "32624-9",
+          "display": "SDE Race"
+        } ]
+      } ],
+      "stratum": [ {
+        "value": {
+          "text": "2076-8"
+        },
+        "population": [ {
+          "id": "F348D767-1BDE-41AB-884D-5F0E19093980",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients 18-85 years of age who had a visit during the measurement period and diagnosis of essential hypertension"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "initial-population",
+              "display": "Initial Population"
+            } ]
+          },
+          "count": 0
+        }, {
+          "id": "3E0D40B3-64FC-4998-B371-34978D033116",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients 18-85 years of age who had a visit during the measurement period and diagnosis of essential hypertension"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "denominator",
+              "display": "Denominator"
+            } ]
+          },
+          "count": 0
+        }, {
+          "id": "24803F44-C643-45C7-A2A5-4C58BD540579",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients whose most recent blood pressure is adequately controlled (systolic blood pressure < 140 mmHg and diastolic blood pressure < 90 mmHg) during the measurement period"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "numerator",
+              "display": "Numerator"
+            } ]
+          },
+          "count": 0
+        }, {
+          "id": "95E1480E-8B61-4777-865D-B2A1D6525E1A",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients with ESRD or dialysis or renal transplant or pregnancy or in hospice or 66+ in nursing care or 66-80 with frailty and advanced illness or 81+ with frailty or receiving palliative care"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "denominator-exclusion",
+              "display": "Denominator Exclusions"
+            } ]
+          },
+          "count": 0
+        } ]
+      } ]
+    }, {
+      "id": "stratifier-sex",
+      "extension": [ {
+        "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+        "valueString": "Administrative sex"
+      } ],
+      "code": [ {
+        "coding": [ {
+          "system": "http://loinc.org",
+          "code": "72143-1",
+          "display": "Sex [HL7.v3]"
+        } ]
+      } ],
+      "stratum": [ {
+        "value": {
+          "text": "F"
+        },
+        "population": [ {
+          "id": "F348D767-1BDE-41AB-884D-5F0E19093980",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients 18-85 years of age who had a visit during the measurement period and diagnosis of essential hypertension"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "initial-population",
+              "display": "Initial Population"
+            } ]
+          },
+          "count": 0
+        }, {
+          "id": "3E0D40B3-64FC-4998-B371-34978D033116",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients 18-85 years of age who had a visit during the measurement period and diagnosis of essential hypertension"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "denominator",
+              "display": "Denominator"
+            } ]
+          },
+          "count": 0
+        }, {
+          "id": "24803F44-C643-45C7-A2A5-4C58BD540579",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients whose most recent blood pressure is adequately controlled (systolic blood pressure < 140 mmHg and diastolic blood pressure < 90 mmHg) during the measurement period"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "numerator",
+              "display": "Numerator"
+            } ]
+          },
+          "count": 0
+        }, {
+          "id": "95E1480E-8B61-4777-865D-B2A1D6525E1A",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients with ESRD or dialysis or renal transplant or pregnancy or in hospice or 66+ in nursing care or 66-80 with frailty and advanced illness or 81+ with frailty or receiving palliative care"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "denominator-exclusion",
+              "display": "Denominator Exclusions"
+            } ]
+          },
+          "count": 0
+        } ]
+      } ]
+    }, {
+      "id": "stratifier-age-group",
+      "extension": [ {
+        "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+        "valueString": "Age Group"
+      } ],
+      "code": [ {
+        "coding": [ {
+          "system": "http://loinc.org",
+          "code": "46251-5",
+          "display": "Age group"
+        } ]
+      } ],
+      "stratum": [ {
+        "value": {
+          "text": "P50Y--P9999Y"
+        },
+        "population": [ {
+          "id": "F348D767-1BDE-41AB-884D-5F0E19093980",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients 18-85 years of age who had a visit during the measurement period and diagnosis of essential hypertension"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "initial-population",
+              "display": "Initial Population"
+            } ]
+          },
+          "count": 0
+        }, {
+          "id": "3E0D40B3-64FC-4998-B371-34978D033116",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients 18-85 years of age who had a visit during the measurement period and diagnosis of essential hypertension"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "denominator",
+              "display": "Denominator"
+            } ]
+          },
+          "count": 0
+        }, {
+          "id": "24803F44-C643-45C7-A2A5-4C58BD540579",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients whose most recent blood pressure is adequately controlled (systolic blood pressure < 140 mmHg and diastolic blood pressure < 90 mmHg) during the measurement period"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "numerator",
+              "display": "Numerator"
+            } ]
+          },
+          "count": 0
+        }, {
+          "id": "95E1480E-8B61-4777-865D-B2A1D6525E1A",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients with ESRD or dialysis or renal transplant or pregnancy or in hospice or 66+ in nursing care or 66-80 with frailty and advanced illness or 81+ with frailty or receiving palliative care"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "denominator-exclusion",
+              "display": "Denominator Exclusions"
+            } ]
+          },
+          "count": 0
+        } ]
+      } ]
+    }, {
+      "id": "stratifier-food-insecurity-risk-status",
+      "extension": [ {
+        "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+        "valueString": "Food insecurity risk status"
+      } ],
+      "code": [ {
+        "coding": [ {
+          "system": "http://loinc.org",
+          "code": "88124-3",
+          "display": "Food insecurity risk [HVS]"
+        } ]
+      } ]
+    } ]
+  } ],
+  "evaluatedResource": [ {
+    "extension": [ {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "24803F44-C643-45C7-A2A5-4C58BD540579"
+    } ],
+    "reference": "Observation/cbdad94e-f911-44af-ae49-1feb1b284631"
+  }, {
+    "extension": [ {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "F348D767-1BDE-41AB-884D-5F0E19093980"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "3E0D40B3-64FC-4998-B371-34978D033116"
+    } ],
+    "reference": "Condition/43bad9ed-5ba5-4afc-a8c2-7006028b99c4"
+  }, {
+    "extension": [ {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "F348D767-1BDE-41AB-884D-5F0E19093980"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "3E0D40B3-64FC-4998-B371-34978D033116"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "95E1480E-8B61-4777-865D-B2A1D6525E1A"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "sde-ethnicity"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "sde-race"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "sde-sex"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "sde-age"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "sde-state-of-residence"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "sde-postal-code-of-residence"
+    } ],
+    "reference": "Patient/dcb68a8a-108d-4711-8b2b-ffc0b575269a"
+  }, {
+    "extension": [ {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "F348D767-1BDE-41AB-884D-5F0E19093980"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "3E0D40B3-64FC-4998-B371-34978D033116"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "95E1480E-8B61-4777-865D-B2A1D6525E1A"
+    } ],
+    "reference": "Encounter/a581184f-af36-498b-a91e-0593d88ebdc0"
+  } ]
+}

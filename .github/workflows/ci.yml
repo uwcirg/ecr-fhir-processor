@@ -62,11 +62,10 @@ jobs:
   conformance-gate:
     name: FHIR conformance gate (HL7 validator)
     runs-on: ubuntu-latest
-    # NOTE: This gate cannot be green until the IG versions are pinned in config
-    # (hl7.fhir.us.ecr / us.core / davinci-deqm are TODO_PIN — see tasks T036 and
-    # TODO(ECR_IG_VERSION) in the constitution). Until then it runs informationally so
-    # the rest of CI is not blocked by an upstream-version dependency.
-    continue-on-error: true
+    # Delta gate: validates the would-be submissions against the supplier's pinned IG set
+    # and fails only on validator errors the transform INTRODUCES vs. the committed source
+    # baseline (test/conformance-baseline.sigs). See scripts/validate.sh.
+    timeout-minutes: 30
     needs: lint-and-test
     steps:
       - uses: actions/checkout@v4
@@ -84,14 +83,17 @@ jobs:
 
       # Cache the HL7 validator jar and its package cache (~/.fhir) so we don't
       # re-download the IG packages on every run. Pattern from
-      # uwcirg/wahealth-csv-to-safr-fhir.
+      # uwcirg/wahealth-csv-to-safr-fhir. The key includes a hash of the config so the
+      # cache is refreshed when the pinned IG set (config.example.json.ig_versions) changes.
       - name: Cache FHIR validator
         uses: actions/cache@v4
         with:
           path: |
             validator_cli.jar
             ~/.fhir
-          key: fhir-validator-${{ runner.os }}
+          key: fhir-validator-${{ runner.os }}-${{ hashFiles('config.example.json') }}
+          restore-keys: |
+            fhir-validator-${{ runner.os }}-
 
       - name: Download FHIR validator
         run: |
@@ -103,5 +105,8 @@ jobs:
       - name: Produce would-be submissions (dry-run)
         run: python3 process.py --input-dir test/input --dry-run --output-dir output
 
-      - name: Validate with versioned IG packages
+      # Delta gate: fails only on validator errors introduced vs. the committed source
+      # baseline. Regenerate the baseline with `scripts/validate.sh --update-baseline`
+      # when the fixtures or pinned IG versions change.
+      - name: Validate with versioned IG packages (delta vs. source baseline)
         run: scripts/validate.sh "output/**/*.json" config.example.json

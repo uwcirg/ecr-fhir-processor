@@ -11,10 +11,12 @@
     "client_secret": "YOUR_CLIENT_SECRET"
   },
   "ig_versions": {
-    "hl7.fhir.us.ecr": "TODO_PIN",
-    "hl7.fhir.us.core": "TODO_PIN",
-    "hl7.fhir.us.davinci-deqm": "TODO_PIN",
-    "aphl.chronic-ds": "0.0.002"
+    "hl7.fhir.us.core": "6.1.0",
+    "hl7.fhir.us.qicore": "4.1.1",
+    "hl7.fhir.us.cqfmeasures": "3.0.0",
+    "hl7.fhir.us.davinci-deqm": "5.0.0",
+    "hl7.fhir.us.ecr": "2.1.2",
+    "hl7.fhir.us.ph-library": "2.0.0"
   },
   "paths": {
     "input_dir": "input",

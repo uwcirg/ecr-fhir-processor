@@ -42,7 +42,7 @@ cp config.example.json config.json
 |-----|----------|-------|
 | `software.name`, `software.identifier_system`, `software.identifier_value` | yes | Provenance identity. |
 | `server.base_url`, `server.token_endpoint`, `server.client_id`, `server.client_secret` | yes (unless `--dry-run`) | OAuth2 client-credentials. **Secrets — never commit.** |
-| `ig_versions{}` | recommended | IG → version for the conformance gate (`hl7.fhir.us.ecr`, `hl7.fhir.us.core`, `hl7.fhir.us.davinci-deqm`, `aphl.chronic-ds`). |
+| `ig_versions{}` | recommended | IG → version for the conformance gate, mirroring the test-data supplier's pinned set (`hl7.fhir.us.core`, `hl7.fhir.us.qicore`, `hl7.fhir.us.cqfmeasures`, `hl7.fhir.us.davinci-deqm`, `hl7.fhir.us.ecr`, `hl7.fhir.us.ph-library`). |
 | `paths{input_dir,output_dir,log_dir}` | optional | Defaults `input`/`output`/`log`. |
 
 > The software **version is not a config field** — it is derived at runtime from

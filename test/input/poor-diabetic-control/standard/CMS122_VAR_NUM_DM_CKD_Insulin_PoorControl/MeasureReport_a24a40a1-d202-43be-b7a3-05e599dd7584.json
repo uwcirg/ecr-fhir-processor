@@ -1,0 +1,694 @@
+{
+  "resourceType": "MeasureReport",
+  "id": "a24a40a1-d202-43be-b7a3-05e599dd7584",
+  "contained": [ {
+    "resourceType": "Observation",
+    "id": "38320b3c-e8ca-4036-950f-a5e2caaee415",
+    "extension": [ {
+      "url": "http://hl7.org/fhir/StructureDefinition/cqf-measureInfo",
+      "extension": [ {
+        "url": "measure",
+        "valueCanonical": "http://fhir.org/guides/cqf/aphl/chronic-ds/Measure/DiabetesHemoglobinA1cHbA1cPoorControl9FHIR"
+      } ]
+    } ],
+    "status": "final",
+    "code": {
+      "coding": [ {
+        "system": "http://terminology.hl7.org/CodeSystem/measure-data-usage",
+        "code": "supplemental-data"
+      }, {
+        "system": "http://loinc.org",
+        "code": "54133-4",
+        "display": "Ethnicity"
+      } ]
+    },
+    "valueCodeableConcept": {
+      "coding": [ {
+        "code": "2135-2"
+      } ]
+    }
+  }, {
+    "resourceType": "Observation",
+    "id": "899d69d0-0b3b-483b-b15c-74090db5d71b",
+    "extension": [ {
+      "url": "http://hl7.org/fhir/StructureDefinition/cqf-measureInfo",
+      "extension": [ {
+        "url": "measure",
+        "valueCanonical": "http://fhir.org/guides/cqf/aphl/chronic-ds/Measure/DiabetesHemoglobinA1cHbA1cPoorControl9FHIR"
+      } ]
+    } ],
+    "status": "final",
+    "code": {
+      "coding": [ {
+        "system": "http://terminology.hl7.org/CodeSystem/measure-data-usage",
+        "code": "supplemental-data"
+      }, {
+        "system": "http://loinc.org",
+        "code": "32624-9",
+        "display": "SDE Race"
+      } ]
+    },
+    "valueCodeableConcept": {
+      "coding": [ {
+        "code": "2054-5"
+      } ]
+    }
+  }, {
+    "resourceType": "Observation",
+    "id": "c4274b5f-6b8f-4ea6-9e48-a31e57931cbf",
+    "extension": [ {
+      "url": "http://hl7.org/fhir/StructureDefinition/cqf-measureInfo",
+      "extension": [ {
+        "url": "measure",
+        "valueCanonical": "http://fhir.org/guides/cqf/aphl/chronic-ds/Measure/DiabetesHemoglobinA1cHbA1cPoorControl9FHIR"
+      } ]
+    } ],
+    "status": "final",
+    "code": {
+      "coding": [ {
+        "system": "http://terminology.hl7.org/CodeSystem/measure-data-usage",
+        "code": "supplemental-data"
+      }, {
+        "system": "http://loinc.org",
+        "code": "72143-1",
+        "display": "Sex [HL7.v3]"
+      } ]
+    },
+    "valueCodeableConcept": {
+      "coding": [ {
+        "code": "F"
+      } ]
+    }
+  }, {
+    "resourceType": "Observation",
+    "id": "9ad360bd-fbb0-4ce0-ba9c-40f333d50e2c",
+    "extension": [ {
+      "url": "http://hl7.org/fhir/StructureDefinition/cqf-measureInfo",
+      "extension": [ {
+        "url": "measure",
+        "valueCanonical": "http://fhir.org/guides/cqf/aphl/chronic-ds/Measure/DiabetesHemoglobinA1cHbA1cPoorControl9FHIR"
+      } ]
+    } ],
+    "status": "final",
+    "code": {
+      "coding": [ {
+        "system": "http://terminology.hl7.org/CodeSystem/measure-data-usage",
+        "code": "supplemental-data"
+      }, {
+        "system": "http://loinc.org",
+        "code": "30525-0",
+        "display": "Age"
+      } ]
+    },
+    "valueCodeableConcept": {
+      "coding": [ {
+        "code": "27"
+      } ]
+    }
+  } ],
+  "extension": [ {
+    "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+    "valueString": "Percentage of patients 18-75 years of age with diabetes who had hemoglobin A1c > 9.0% during the measurement period"
+  }, {
+    "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.supplementalDataElement.reference",
+    "valueReference": {
+      "extension": [ {
+        "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+        "valueString": "sde-sex"
+      } ],
+      "reference": "#c4274b5f-6b8f-4ea6-9e48-a31e57931cbf"
+    }
+  }, {
+    "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.supplementalDataElement.reference",
+    "valueReference": {
+      "extension": [ {
+        "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+        "valueString": "sde-ethnicity"
+      } ],
+      "reference": "#38320b3c-e8ca-4036-950f-a5e2caaee415"
+    }
+  }, {
+    "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.supplementalDataElement.reference",
+    "valueReference": {
+      "extension": [ {
+        "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+        "valueString": "sde-age"
+      } ],
+      "reference": "#9ad360bd-fbb0-4ce0-ba9c-40f333d50e2c"
+    }
+  }, {
+    "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.supplementalDataElement.reference",
+    "valueReference": {
+      "extension": [ {
+        "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+        "valueString": "sde-race"
+      } ],
+      "reference": "#899d69d0-0b3b-483b-b15c-74090db5d71b"
+    }
+  } ],
+  "status": "complete",
+  "type": "individual",
+  "measure": "http://fhir.org/guides/cqf/aphl/chronic-ds/Measure/DiabetesHemoglobinA1cHbA1cPoorControl9FHIR|0.0.002",
+  "subject": {
+    "reference": "Patient/b9a1b53d-1952-446d-88e9-e7ee86c38c02"
+  },
+  "date": "2026-05-25T06:34:23+00:00",
+  "period": {
+    "start": "2025-01-01T06:00:00+00:00",
+    "end": "2027-01-01T07:59:00+00:00"
+  },
+  "improvementNotation": {
+    "coding": [ {
+      "system": "http://terminology.hl7.org/CodeSystem/measure-improvement-notation",
+      "code": "decrease",
+      "display": "Lower score indicates better quality"
+    } ]
+  },
+  "group": [ {
+    "population": [ {
+      "id": "F09F8D18-F787-46EA-8791-3D3EF50A4C72",
+      "extension": [ {
+        "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+        "valueString": "Seen patients between 18 and 75 years of age with an active diabetes diagnosis"
+      } ],
+      "code": {
+        "coding": [ {
+          "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+          "code": "initial-population",
+          "display": "Initial Population"
+        } ]
+      },
+      "count": 1
+    }, {
+      "id": "66505C6C-AAB0-4232-B0CA-15FB438090F4",
+      "extension": [ {
+        "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+        "valueString": "Seen patients between 18 and 75 years of age with an active diabetes diagnosis"
+      } ],
+      "code": {
+        "coding": [ {
+          "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+          "code": "denominator",
+          "display": "Denominator"
+        } ]
+      },
+      "count": 1
+    }, {
+      "id": "95BCB9D4-86A8-43C1-BE29-7440A2ECE294",
+      "extension": [ {
+        "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+        "valueString": "Patients whose most recent HbA1c > 9%"
+      } ],
+      "code": {
+        "coding": [ {
+          "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+          "code": "numerator",
+          "display": "Numerator"
+        } ]
+      },
+      "count": 1
+    }, {
+      "id": "6AD9B271-BBB4-4BB6-95B1-D1A7E50D812F",
+      "extension": [ {
+        "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+        "valueString": "Patients in hospice or long term care, or with advanced illness or frailty"
+      } ],
+      "code": {
+        "coding": [ {
+          "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+          "code": "denominator-exclusion",
+          "display": "Denominator Exclusions"
+        } ]
+      },
+      "count": 0
+    } ],
+    "measureScore": {
+      "value": 0.0
+    },
+    "stratifier": [ {
+      "id": "stratifier-ethnicity",
+      "extension": [ {
+        "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+        "valueString": "Ethnicity (CDC Value Set)"
+      } ],
+      "code": [ {
+        "coding": [ {
+          "system": "http://loinc.org",
+          "code": "54133-4",
+          "display": "Ethnicity"
+        } ]
+      } ],
+      "stratum": [ {
+        "value": {
+          "text": "2135-2"
+        },
+        "population": [ {
+          "id": "F09F8D18-F787-46EA-8791-3D3EF50A4C72",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Seen patients between 18 and 75 years of age with an active diabetes diagnosis"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "initial-population",
+              "display": "Initial Population"
+            } ]
+          },
+          "count": 1
+        }, {
+          "id": "66505C6C-AAB0-4232-B0CA-15FB438090F4",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Seen patients between 18 and 75 years of age with an active diabetes diagnosis"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "denominator",
+              "display": "Denominator"
+            } ]
+          },
+          "count": 1
+        }, {
+          "id": "95BCB9D4-86A8-43C1-BE29-7440A2ECE294",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients whose most recent HbA1c > 9%"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "numerator",
+              "display": "Numerator"
+            } ]
+          },
+          "count": 1
+        }, {
+          "id": "6AD9B271-BBB4-4BB6-95B1-D1A7E50D812F",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients in hospice or long term care, or with advanced illness or frailty"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "denominator-exclusion",
+              "display": "Denominator Exclusions"
+            } ]
+          },
+          "count": 0
+        } ],
+        "measureScore": {
+          "value": 1.0
+        }
+      } ]
+    }, {
+      "id": "stratifier-payer",
+      "extension": [ {
+        "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+        "valueString": "Payer"
+      } ],
+      "code": [ {
+        "coding": [ {
+          "system": "http://terminology.hl7.org/CodeSystem/coverage-class",
+          "code": "plan",
+          "display": "SDE Payer"
+        } ]
+      } ],
+      "stratum": [ {
+        "population": [ {
+          "id": "F09F8D18-F787-46EA-8791-3D3EF50A4C72",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Seen patients between 18 and 75 years of age with an active diabetes diagnosis"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "initial-population",
+              "display": "Initial Population"
+            } ]
+          },
+          "count": 1
+        }, {
+          "id": "66505C6C-AAB0-4232-B0CA-15FB438090F4",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Seen patients between 18 and 75 years of age with an active diabetes diagnosis"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "denominator",
+              "display": "Denominator"
+            } ]
+          },
+          "count": 1
+        }, {
+          "id": "95BCB9D4-86A8-43C1-BE29-7440A2ECE294",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients whose most recent HbA1c > 9%"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "numerator",
+              "display": "Numerator"
+            } ]
+          },
+          "count": 1
+        }, {
+          "id": "6AD9B271-BBB4-4BB6-95B1-D1A7E50D812F",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients in hospice or long term care, or with advanced illness or frailty"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "denominator-exclusion",
+              "display": "Denominator Exclusions"
+            } ]
+          },
+          "count": 0
+        } ],
+        "measureScore": {
+          "value": 1.0
+        }
+      } ]
+    }, {
+      "id": "stratifier-race",
+      "extension": [ {
+        "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+        "valueString": "Race (CDC Value Set)"
+      } ],
+      "code": [ {
+        "coding": [ {
+          "system": "http://loinc.org",
+          "code": "32624-9",
+          "display": "SDE Race"
+        } ]
+      } ],
+      "stratum": [ {
+        "value": {
+          "text": "2054-5"
+        },
+        "population": [ {
+          "id": "F09F8D18-F787-46EA-8791-3D3EF50A4C72",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Seen patients between 18 and 75 years of age with an active diabetes diagnosis"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "initial-population",
+              "display": "Initial Population"
+            } ]
+          },
+          "count": 1
+        }, {
+          "id": "66505C6C-AAB0-4232-B0CA-15FB438090F4",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Seen patients between 18 and 75 years of age with an active diabetes diagnosis"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "denominator",
+              "display": "Denominator"
+            } ]
+          },
+          "count": 1
+        }, {
+          "id": "95BCB9D4-86A8-43C1-BE29-7440A2ECE294",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients whose most recent HbA1c > 9%"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "numerator",
+              "display": "Numerator"
+            } ]
+          },
+          "count": 1
+        }, {
+          "id": "6AD9B271-BBB4-4BB6-95B1-D1A7E50D812F",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients in hospice or long term care, or with advanced illness or frailty"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "denominator-exclusion",
+              "display": "Denominator Exclusions"
+            } ]
+          },
+          "count": 0
+        } ],
+        "measureScore": {
+          "value": 1.0
+        }
+      } ]
+    }, {
+      "id": "stratifier-sex",
+      "extension": [ {
+        "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+        "valueString": "Administrative sex"
+      } ],
+      "code": [ {
+        "coding": [ {
+          "system": "http://loinc.org",
+          "code": "72143-1",
+          "display": "Sex [HL7.v3]"
+        } ]
+      } ],
+      "stratum": [ {
+        "value": {
+          "text": "F"
+        },
+        "population": [ {
+          "id": "F09F8D18-F787-46EA-8791-3D3EF50A4C72",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Seen patients between 18 and 75 years of age with an active diabetes diagnosis"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "initial-population",
+              "display": "Initial Population"
+            } ]
+          },
+          "count": 1
+        }, {
+          "id": "66505C6C-AAB0-4232-B0CA-15FB438090F4",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Seen patients between 18 and 75 years of age with an active diabetes diagnosis"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "denominator",
+              "display": "Denominator"
+            } ]
+          },
+          "count": 1
+        }, {
+          "id": "95BCB9D4-86A8-43C1-BE29-7440A2ECE294",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients whose most recent HbA1c > 9%"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "numerator",
+              "display": "Numerator"
+            } ]
+          },
+          "count": 1
+        }, {
+          "id": "6AD9B271-BBB4-4BB6-95B1-D1A7E50D812F",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients in hospice or long term care, or with advanced illness or frailty"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "denominator-exclusion",
+              "display": "Denominator Exclusions"
+            } ]
+          },
+          "count": 0
+        } ],
+        "measureScore": {
+          "value": 1.0
+        }
+      } ]
+    }, {
+      "id": "stratifier-age-group",
+      "extension": [ {
+        "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+        "valueString": "Age Group"
+      } ],
+      "code": [ {
+        "coding": [ {
+          "system": "http://loinc.org",
+          "code": "46251-5",
+          "display": "Age Group"
+        } ]
+      } ],
+      "stratum": [ {
+        "value": {
+          "text": "P25Y--P29Y"
+        },
+        "population": [ {
+          "id": "F09F8D18-F787-46EA-8791-3D3EF50A4C72",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Seen patients between 18 and 75 years of age with an active diabetes diagnosis"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "initial-population",
+              "display": "Initial Population"
+            } ]
+          },
+          "count": 1
+        }, {
+          "id": "66505C6C-AAB0-4232-B0CA-15FB438090F4",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Seen patients between 18 and 75 years of age with an active diabetes diagnosis"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "denominator",
+              "display": "Denominator"
+            } ]
+          },
+          "count": 1
+        }, {
+          "id": "95BCB9D4-86A8-43C1-BE29-7440A2ECE294",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients whose most recent HbA1c > 9%"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "numerator",
+              "display": "Numerator"
+            } ]
+          },
+          "count": 1
+        }, {
+          "id": "6AD9B271-BBB4-4BB6-95B1-D1A7E50D812F",
+          "extension": [ {
+            "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+            "valueString": "Patients in hospice or long term care, or with advanced illness or frailty"
+          } ],
+          "code": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+              "code": "denominator-exclusion",
+              "display": "Denominator Exclusions"
+            } ]
+          },
+          "count": 0
+        } ],
+        "measureScore": {
+          "value": 1.0
+        }
+      } ]
+    }, {
+      "id": "stratifier-food-insecurity-risk-status",
+      "extension": [ {
+        "url": "http://hl7.org/fhir/5.0/StructureDefinition/extension-MeasureReport.population.description",
+        "valueString": "Food insecurity risk status"
+      } ],
+      "code": [ {
+        "coding": [ {
+          "system": "http://loinc.org",
+          "code": "88124-3",
+          "display": "Food insecurity risk [HVS]"
+        } ]
+      } ]
+    } ]
+  } ],
+  "evaluatedResource": [ {
+    "extension": [ {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "6AD9B271-BBB4-4BB6-95B1-D1A7E50D812F"
+    } ],
+    "reference": "MedicationRequest/50fe1857-1750-43a9-a7eb-dffa9946870d"
+  }, {
+    "extension": [ {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "F09F8D18-F787-46EA-8791-3D3EF50A4C72"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "66505C6C-AAB0-4232-B0CA-15FB438090F4"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "6AD9B271-BBB4-4BB6-95B1-D1A7E50D812F"
+    } ],
+    "reference": "Encounter/d70f0322-5d40-45ad-8f75-2bc2664787c0"
+  }, {
+    "extension": [ {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "F09F8D18-F787-46EA-8791-3D3EF50A4C72"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "66505C6C-AAB0-4232-B0CA-15FB438090F4"
+    } ],
+    "reference": "Condition/38accc49-ee40-49bc-b2c6-5e3d34970572"
+  }, {
+    "extension": [ {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "95BCB9D4-86A8-43C1-BE29-7440A2ECE294"
+    } ],
+    "reference": "Observation/79c746bd-6e5d-4b19-9f29-c51abd02a402"
+  }, {
+    "extension": [ {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "F09F8D18-F787-46EA-8791-3D3EF50A4C72"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "66505C6C-AAB0-4232-B0CA-15FB438090F4"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "6AD9B271-BBB4-4BB6-95B1-D1A7E50D812F"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "sde-ethnicity"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "sde-race"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "sde-sex"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "sde-age"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "sde-state-of-residence"
+    }, {
+      "url": "http://hl7.org/fhir/us/davinci-deqm/StructureDefinition/extension-criteriaReference",
+      "valueString": "sde-postal-code-of-residence"
+    } ],
+    "reference": "Patient/b9a1b53d-1952-446d-88e9-e7ee86c38c02"
+  } ]
+}

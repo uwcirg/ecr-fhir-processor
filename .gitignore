@@ -229,3 +229,9 @@ __marimo__/
 #   config.example.json is the committed template; config.json is never committed.
 config.json
 *.secret*
+
+# Runtime artifacts (real data, audit logs, submitted-JSON mirror).
+#   test/input fixtures are committed; the root input/output/log dirs hold real
+#   PHI-bearing runs and audit trails and MUST stay out of version control.
+/output/
+/log/

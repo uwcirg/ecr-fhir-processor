@@ -1,0 +1,17 @@
+# Ruff configuration for ecr-fhir-processor.
+# The runtime is Python 3 standard-library only (constitution: Zero-Dependency
+# Runtime); ruff is a dev/CI-only linter and is never required to run the processor.
+
+target-version = "py39"
+line-length = 100
+
+[lint]
+# A conservative, stdlib-friendly rule set: pyflakes (F), pycodestyle errors (E)
+# and warnings (W), isort (I), pyupgrade (UP), and flake8-bugbear (B).
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+  "E501",  # line length handled by the formatter / line-length above
+]
+
+[lint.per-file-ignores]
+"tests/*" = ["E402"]  # tests adjust sys.path before importing process

@@ -81,25 +81,33 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # Cache the HL7 validator jar and its package cache (~/.fhir) so we don't
+      # PIN the validator version. The committed conformance baseline
+      # (test/conformance-baseline.sigs) is tied to a specific validator's exact error
+      # wording, so "latest" would drift and cause false "introduced error" failures.
+      # Bump this together with a `--update-baseline` regeneration.
+      - name: Pin FHIR validator version
+        run: echo "FHIR_VALIDATOR_VERSION=6.9.9" >> "$GITHUB_ENV"
+
+      # Cache the (pinned) validator jar and its package cache (~/.fhir) so we don't
       # re-download the IG packages on every run. Pattern from
-      # uwcirg/wahealth-csv-to-safr-fhir. The key includes a hash of the config so the
-      # cache is refreshed when the pinned IG set (config.example.json.ig_versions) changes.
+      # uwcirg/wahealth-csv-to-safr-fhir. The key includes the validator version and a hash
+      # of the config so the cache refreshes when either the validator or the pinned IG set
+      # (config.example.json.ig_versions) changes.
       - name: Cache FHIR validator
         uses: actions/cache@v4
         with:
           path: |
             validator_cli.jar
             ~/.fhir
-          key: fhir-validator-${{ runner.os }}-${{ hashFiles('config.example.json') }}
+          key: fhir-validator-${{ runner.os }}-${{ env.FHIR_VALIDATOR_VERSION }}-${{ hashFiles('config.example.json') }}
           restore-keys: |
-            fhir-validator-${{ runner.os }}-
+            fhir-validator-${{ runner.os }}-${{ env.FHIR_VALIDATOR_VERSION }}-
 
       - name: Download FHIR validator
         run: |
           if [ ! -f validator_cli.jar ]; then
-            curl -L -o validator_cli.jar \
-              https://github.com/hapifhir/org.hl7.fhir.core/releases/latest/download/validator_cli.jar
+            curl -fL -o validator_cli.jar \
+              "https://github.com/hapifhir/org.hl7.fhir.core/releases/download/${FHIR_VALIDATOR_VERSION}/validator_cli.jar"
           fi
 
       - name: Produce would-be submissions (dry-run)

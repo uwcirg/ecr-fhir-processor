@@ -41,8 +41,11 @@ So the gate enforces constitution Principle III's actual requirement — *zero
 
 The baseline is the set of error signatures from validating the pre-transform fixtures
 (`test/input/**/*.json`) with the same pinned IGs. It is committed so a gate run needs only
-**one** validation pass. Regenerate and commit it whenever the fixtures or the pinned IG
-versions change:
+**one** validation pass. Because the validator's exact error wording changes between
+releases, the baseline is tied to a **pinned validator version** (`FHIR_VALIDATOR_VERSION`
+in `.github/workflows/ci.yml`, currently `6.9.9`). Regenerate and commit the baseline
+whenever the fixtures, the pinned IG versions, or the validator version change — using that
+same validator version:
 
 ```
 scripts/validate.sh --update-baseline "test/input/**/*.json" config.example.json

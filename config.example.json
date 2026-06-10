@@ -1,0 +1,14 @@
+{
+  "software": {
+    "name": "ecr-fhir-processor",
+    "version": "1.0.0",
+    "identifier_system": "urn:oid:2.16.840.1.113883.3.2",
+    "identifier_value": "ecr-fhir-processor"
+  },
+  "server": {
+    "base_url": "YOUR_FHIR_SERVER_URL",
+    "token_endpoint": "YOUR_TOKEN_ENDPOINT",
+    "client_id": "YOUR_CLIENT_ID",
+    "client_secret": "YOUR_CLIENT_SECRET"
+  }
+}

@@ -82,6 +82,24 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      # Cache the HL7 validator jar and its package cache (~/.fhir) so we don't
+      # re-download the IG packages on every run. Pattern from
+      # uwcirg/wahealth-csv-to-safr-fhir.
+      - name: Cache FHIR validator
+        uses: actions/cache@v4
+        with:
+          path: |
+            validator_cli.jar
+            ~/.fhir
+          key: fhir-validator-${{ runner.os }}
+
+      - name: Download FHIR validator
+        run: |
+          if [ ! -f validator_cli.jar ]; then
+            curl -L -o validator_cli.jar \
+              https://github.com/hapifhir/org.hl7.fhir.core/releases/latest/download/validator_cli.jar
+          fi
+
       - name: Produce would-be submissions (dry-run)
         run: python3 process.py --input-dir test/input --dry-run --output-dir output
 

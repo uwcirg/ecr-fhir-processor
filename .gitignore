@@ -230,6 +230,9 @@ __marimo__/
 config.json
 *.secret*
 
+# HL7 FHIR Reference Validator — downloaded/cached in CI, never committed.
+validator_cli.jar
+
 # Runtime artifacts (real data, audit logs, submitted-JSON mirror).
 #   test/input fixtures are committed; the root input/output/log dirs hold real
 #   PHI-bearing runs and audit trails and MUST stay out of version control.

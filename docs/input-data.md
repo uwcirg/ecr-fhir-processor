@@ -102,6 +102,16 @@ together; every file refers to the same `Patient/<GUID>`.
 - **This file is largely a superset of Files 1 + 2** — the same clinical content,
   repackaged for transport. (The processor persists it whole under its wrapper
   GUID; it does not unpack the nested document in MVP — research.md D2.)
+- **What it genuinely adds:** the `MessageHeader` (transport/routing) and the eICR
+  **`Composition`** — a "Public Health Case Report" (LOINC `55751-2`) with ~13
+  narrative sections (Reason for Visit, Problem List, …). The nested **MeasureReport is
+  byte-identical to File 2.**
+- **What it degrades:** the eICR's nested clinical copies are **lower-fidelity** than
+  File 1's — e.g. Observation `effectiveDateTime` loses time-of-day
+  (`2025-02-10T09:10:00Z` → `…T00:00:00+00:00`), and `Patient.address.line` is
+  double-JSON-encoded (`"221 Elm Street"` → `"[\"221 Elm Street\"]"`). **File 1 (the
+  collection Bundle) is therefore the authoritative source for the clinical resources;**
+  File 3's value is the Composition, not its embedded data.
 
 > ⚠️ **The nested document Bundle's `id` is NOT its identity.** It is a fixed,
 > measure-named handle reused across patients
@@ -211,3 +221,44 @@ actual fixtures, worth keeping in mind:
    `Bunlde_{uuid}.json` (→ `Bundle_{uuid}.json`).
 5. The PDF's folder counts (365 / 528) describe the **full delivered package**, not
    the sample committed here.
+
+---
+
+## 6. Downstream consumer & analytics (Aidbox SQL-on-FHIR)
+
+The primary consumer is a **state Department of Health**. The processor persists into
+**Aidbox**; the DoH analytics team then authors **SQL-on-FHIR `ViewDefinition`s** to
+flatten the stored FHIR resources into tables for the analytics team to consume.
+
+Stakeholder framing (paraphrased): *"all the records as eCR payloads used to create the
+measures' numerator and denominator"* — **plus the not-in-population cases.** Mapped to
+this data:
+
+- The **eCR payload is `Bundle_<uuid>.json`** (File 3) and exists **only for
+  in-population** cases. It is the DoH-facing artifact, and the **`Composition`** (§2)
+  is what they care about most. The reduced fidelity of the eICR's *nested clinical
+  copies* (§2) is acceptable to this consumer.
+- **NIP cases are in scope too**, but they have **no eCR payload** — they are
+  represented by their (zero-count) **MeasureReport** + collection-bundle resources.
+
+**Why the storage shape matters.** A SQL-on-FHIR `ViewDefinition` is rooted at **one
+resource type** and flattens **first-class, individually-stored resources**; it cannot
+reach into an opaque nested Bundle. Consequences:
+
+- ✅ **MeasureReport is the analytic spine.** It is first-class for **every** case
+  (in-pop *and* NIP), and carries `measure`, `group.population` (IP/Den/Num/Excl), and
+  `subject` — one row per case, joinable to the clinical resources (also first-class,
+  from the collection→transaction PUTs) by patient. The current persistence (research.md
+  **D2**) already lands these SQL-on-FHIR-ready. This covers the num/den requirement
+  *and* the NIP requirement.
+- ✅ **The eICR `Composition` is promoted to first-class** (decided — spec **OQ-3 /
+  FR-022**, research.md **D2b**). The message Bundle is still retained whole as the eCR
+  payload, and the nested `Composition` is *additionally* persisted at `Composition/<guid>`
+  so a `ViewDefinition` over `Composition` can flatten it. Verified safe across all three
+  standard fixtures: the Composition's id is a GUID and **100% of its references resolve to
+  the clean collection-bundle resources**.
+- 🧨 **Only the Composition is promoted — not the eICR's clinical resources.** Those are
+  degraded duplicates sharing GUIDs with the clean collection-bundle copies; re-persisting
+  them would overwrite good analytics data and trip the `(resourceType, id)` collision
+  guard (spec **FR-019**, research.md **D4b**). `MessageHeader` is also left nested — its
+  `focus` points at the fixed-id document Bundle we deliberately don't persist standalone.

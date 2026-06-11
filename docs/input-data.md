@@ -53,7 +53,7 @@ together; every file refers to the same `Patient/<GUID>`.
         <scenario_id>.json         MeasureReport_<uuid>.json      Bundle_<uuid>.json  (eCR payload)
         (Bundle / collection)      (MeasureReport)                (Bundle / message)
         ┌───────────────────────┐  ┌─────────────────────────┐    ┌─────────────────────────────────────┐
-        │ Patient/<G>           │◄─│ subject → Patient/<G>   │    │ [0] MessageHeader                   │
+        │ Patient/<G>           │  │ subject → Patient/<G>   │    │ [0] MessageHeader                   │
         │ Condition             │  │ measure → <canonical>   │    │       focus → Bundle/eicr-report-…  │
         │ Encounter             │  │ evaluatedResource[] ──► │    │ [1] Bundle (type=document) = eICR   │
         │ Observation           │  │   Encounter/Condition/  │    │   • Composition   ◄── NEW           │

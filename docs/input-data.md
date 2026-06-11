@@ -115,33 +115,51 @@ together; every file refers to the same `Patient/<GUID>`.
 ### How these three files were generated (inferred)
 
 The three files are **sibling exports of one server state on a drajer/eCRNow stack**,
-*not* an input fed in that produced two outputs. Evidence from the fixtures:
+*not* one input that produced two outputs. The generation involves **two distinct
+engines** that are easy to conflate because both use CQL:
 
-- Every entry's `fullUrl` and every absolute reference is a
-  `http://ecr.drajer.com/secure/fhir-r4/fhir/...` URL (drajer is the eCRNow
-  reference host). The message Bundle's `MessageHeader.source.endpoint` is that same
-  endpoint, and its `sender` is the drajer `Organization`.
-- The eICR document Bundle carries a `Composition` of type **"Public Health Case
-  Report"** — eCRNow's signature eICR output.
+| Engine | Role here | Produces |
+|---|---|---|
+| **eCQM measure-evaluation engine** — `$evaluate-measure` (HAPI/cqf-ruler clinical-reasoning, `fqm-execution`, …) running the CQF APHL [`chronic-ds`](http://fhir.org/guides/cqf/aphl/chronic-ds) measure content | Scores the patient against the `Measure` (IP/Den/Num/Excl, `measureScore`) | **File 2 — MeasureReport** |
+| **eCRNow** ([drajer-health/eCRNow](https://github.com/drajer-health/eCRNow)) | eICR *triggering* (RCTC trigger codes via eRSD) and eICR *generation* — collects patient data with "Loading Queries" and packages it as a Public Health Case Report | **File 3 — eICR message Bundle**, with File 2 folded in as its second nested bundle |
 
-Likely pipeline (reconstructed): patient data is loaded onto the drajer FHIR server →
-an **eCQM / CQL measure-evaluation engine** (the CQF APHL `chronic-ds` content)
-produces the **MeasureReport** → **eCRNow** produces the **eICR message Bundle** and
-folds that MeasureReport in as its second nested bundle → all three are exported as
-the scenario folder.
+Reconstructed flow:
+
+```
+patient clinical data on the drajer FHIR server (http://ecr.drajer.com/...)
+        │
+        ├──► eCQM engine ($evaluate-measure, chronic-ds Measure) ──► MeasureReport         (File 2)
+        │
+        └──► eCRNow (RCTC trigger → Loading Queries → eICR) ───────► eICR message Bundle    (File 3)
+                                                                       └─ re-contains the patient
+                                                                          resources + the MeasureReport
+        │
+        └──► export of the patient resources as-is ───────────────► collection Bundle      (File 1)
+```
+
+**Why two engines, not one.** eCRNow's scope is case *reporting*, not quality
+*measurement*. It does embed a CQL / clinical-reasoning engine, but only for
+**PlanDefinition / trigger evaluation** (deciding *whether and when* to report) — its
+README exposes exactly one knob, `cql.enabled` "for PlanDefinition evaluation," and
+makes **no** mention of `MeasureReport`, eCQM, or `$evaluate-measure` (verified against
+the master README, 2026-06). Computing the population counts in File 2 is a *different*
+use of CQL performed by a separate measure-evaluation engine. So "feed file 1 into
+eCRNow, get files 2 and 3" conflates the two engines.
 
 > ⚠️ **Caveat — `<scenario_id>.json` is a drajer export, not a pristine input.**
-> Because its `entry.fullUrl`s are drajer server URLs, the collection Bundle is a
-> snapshot of resources that already lived on the drajer server, not a clean
-> hand-authored seed. Two consequences:
-> - The MeasureReport is the product of a **separate** measure-evaluation engine, not
->   of eCRNow — "feed file 1 into eCRNow, get files 2 and 3" conflates two engines.
-> - These drajer absolute references are exactly what the processor must **not**
->   rewrite (they're external by definition) but **should** WARNING-log — see
->   research.md **D3**.
+> Every `entry.fullUrl` and absolute reference is a
+> `http://ecr.drajer.com/secure/fhir-r4/fhir/...` URL, and the message Bundle's
+> `MessageHeader.source.endpoint` / `sender` point at the same drajer server. So the
+> collection Bundle is a **snapshot of resources that already lived on the drajer
+> server**, not a clean hand-authored seed fed *into* the pipeline. The actual input
+> was the underlying patient data on that server; all three files are exports of it.
 >
-> This is *inferred from the artifacts* (endpoints, `fullUrl`s, `Composition` type,
-> measure canonical), not confirmed by supplier pipeline docs or eCRNow logs.
+> Those drajer absolute references are exactly what the processor must **not** rewrite
+> (they are external by definition) but **should** WARNING-log — see research.md **D3**.
+>
+> The engine split and pipeline above are *inferred from the artifacts* (endpoints,
+> `fullUrl`s, `Composition` type, measure canonical) plus eCRNow's public docs — not
+> confirmed by the test-data supplier's own pipeline description.
 
 ---
 

@@ -16,7 +16,9 @@ Repository and Analytics Exchange" project.
 
 - Recursively discovers `*.json` under the input tree, organized by
   `{measure}/{population}/{scenario}/`, and classifies each file as a **collection
-  bundle**, **MeasureReport**, **eCR message bundle**, or **unknown** (skipped).
+  bundle**, **MeasureReport**, **eCR message bundle**, or **unknown** (skipped). See
+  [`docs/input-data.md`](docs/input-data.md) for how the input files are organized and
+  how the files within a scenario relate.
 - Stamps every persisted resource (and a message Bundle's own `meta`) with searchable
   provenance metadata, then persists it:
   - **collection** Bundles are converted to a FHIR **transaction** Bundle of
@@ -108,8 +110,9 @@ scripts/validate.sh        # wraps validator_cli.jar with versioned -ig packages
 # 3. Server acceptance gate — persist to a test FHIR server and confirm acceptance.
 ```
 
-See [`specs/001-mvp-fhir-processor/quickstart.md`](specs/001-mvp-fhir-processor/quickstart.md)
-for the full validation guide and
+See [`docs/input-data.md`](docs/input-data.md) for the input-data reference,
+[`specs/001-mvp-fhir-processor/quickstart.md`](specs/001-mvp-fhir-processor/quickstart.md)
+for the full validation guide, and
 [`.specify/memory/constitution.md`](.specify/memory/constitution.md) for the governing
 principles. Documented upstream validator issues are tracked in
 [`known-validation-issues.md`](known-validation-issues.md).

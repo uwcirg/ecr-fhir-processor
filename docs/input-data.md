@@ -50,20 +50,25 @@ encounter from three angles**. The **Patient GUID is the spine** that ties them
 together; every file refers to the same `Patient/<GUID>`.
 
 ```
-        <scenario_id>.json                MeasureReport_<uuid>.json          Bundle_<uuid>.json
-        (Bundle / collection)             (MeasureReport)                    (Bundle / message)
-        ┌───────────────────────┐         ┌─────────────────────────┐        ┌───────────────────────────────┐
-        │ Patient/<G>           │◄────────┤ subject → Patient/<G>   │        │ [0] MessageHeader             │
-        │ Condition             │         │ measure → <canonical>   │        │       focus → Bundle/eicr-…   │
-        │ Encounter             │◄┐       │ evaluatedResource[] ────┼──┐     │ [1] Bundle (type=document) ◄──┘
-        │ Observation           │ └───────┼──► Encounter/Condition/ │  │     │       = the eICR; RE-CONTAINS  │
-        │ Practitioner (shared) │         │     Observation GUIDs   │  └────►│         Patient + all input   │
-        │ Organization (shared) │         │ populations: IP/Den/Num │        │         resources             │
-        │ Location     (shared) │         │ measureScore            │        │ [2] Bundle (type=collection)  │
-        └───────────────────────┘         └─────────────────────────┘        │       = wrapper around the    │
-                  ▲                                                           │         MeasureReport         │
-                  └────────────── same resource GUIDs reappear in [1] ────────┘                               
-                                                                             └───────────────────────────────┘
+        <scenario_id>.json         MeasureReport_<uuid>.json      Bundle_<uuid>.json  (eCR payload)
+        (Bundle / collection)      (MeasureReport)                (Bundle / message)
+        ┌───────────────────────┐  ┌─────────────────────────┐    ┌─────────────────────────────────────┐
+        │ Patient/<G>           │◄─│ subject → Patient/<G>   │    │ [0] MessageHeader                   │
+        │ Condition             │  │ measure → <canonical>   │    │       focus → Bundle/eicr-report-…  │
+        │ Encounter             │  │ evaluatedResource[] ──► │    │ [1] Bundle (type=document) = eICR   │
+        │ Observation           │  │   Encounter/Condition/  │    │   • Composition   ◄── NEW           │
+        │ Practitioner (shared) │  │   Observation GUIDs     │    │     "Public Health Case Report",    │
+        │ Organization (shared) │  │ populations: IP/Den/Num │    │     ~13 narrative sections          │
+        │ Location     (shared) │  │ measureScore            │    │   • re-contains Patient + all input │
+        └───────────────────────┘  └─────────────────────────┘    │     resources (LOWER-FIDELITY —     │
+                                                                  │     see File 3 notes below)         │
+                                                                  │ [2] Bundle (type=collection)        │
+                                                                  │   = wrapper around the MeasureReport│
+                                                                  └─────────────────────────────────────┘
+
+        Spine: every file shares the same Patient/<G>, and the eICR + MeasureReport reuse the
+        collection's resource GUIDs. [2]'s MeasureReport is byte-identical to the middle file;
+        only the Composition in [1] is new (this repo will save it additionally as an independent resource).
 ```
 
 ### File 1 — `<scenario_id>.json` (the collection Bundle) — **the input data**

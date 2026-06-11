@@ -252,6 +252,72 @@ placeholders, fails fast with a message naming the field and a non-zero exit.
 
 ---
 
+## Phase 7: User Story 4 - Deliver records for downstream SQL-on-FHIR analytics (Priority: P2)
+
+> **Added 2026-06-11** after the analytics-consumer requirement landed (spec **US4**,
+> **FR-020/021/022**, research.md **D2b**, **OQ-3** resolved). Tasks T001–T037 above are
+> complete; this phase is net-new and **not yet implemented**.
+
+**Goal**: Make the persisted data analyzable via Aidbox **SQL-on-FHIR** `ViewDefinition`s.
+The base requirement (MeasureReport + clinical resources as first-class, for in-population
+**and** not-in-population) is already satisfied by US1's transaction-PUT persistence; the
+net-new work is **promoting the eICR `Composition` to a first-class resource** (FR-022 / D2b)
+so it can be flattened, plus confirming NIP coverage (FR-021).
+
+**Independent Test**: Run `python3 process.py --input-dir test/input` against a FHIR server;
+for each in-population scenario confirm a standalone `Composition/<guid>` exists (queryable),
+the message `Bundle/<guid>` is still retained whole, and the message Bundle's nested clinical
+resources were NOT separately written (no overwrite of the clean collection-bundle copies).
+For each not-in-population scenario confirm its (zero-count) MeasureReport and clinical
+resources are first-class with no skips.
+
+> Note: Authoring the `ViewDefinition`s themselves is **out of scope** (owned by the DoH
+> analytics team — spec Assumptions). This phase only makes the data SQL-on-FHIR-ready.
+
+### Tests for User Story 4 ⚠️
+
+> Write these FIRST and confirm they FAIL before implementing.
+
+- [ ] T038 [P] [US4] Unit test for eICR Composition extraction in `tests/test_composition.py`:
+  given an eCR message Bundle fixture, assert the extractor returns exactly the nested
+  `type=document` Bundle's `Composition` (GUID `id` preserved, references unchanged), and that
+  the message Bundle's nested clinical resources are NOT included in the to-persist set
+  (FR-022, D2b).
+- [ ] T039 [P] [US4] Extend `tests/test_collision.py`: assert the promoted `Composition` GUID
+  enters the top-level `(resourceType, id)` seen-set as a normal unique resource, while the
+  nested fixed-id `eicr-report-*` document Bundle still never enters it (FR-019/FR-022, D4b).
+
+### Implementation for User Story 4
+
+- [ ] T040 [US4] Implement eICR `Composition` extraction in `process.py`: when handling a
+  `message` Bundle, locate the nested `type=document` Bundle and extract its `Composition`;
+  stamp it (US2 `stamp`); `PUT [base]/Composition/<id>` **in addition** to persisting the
+  message Bundle whole (T016). MUST promote only the `Composition`; MUST NOT enqueue the
+  document Bundle's other (clinical) entries for persistence (FR-022, D2b, data-model
+  transforms).
+- [ ] T041 [US4] Wire the `Composition` outcome into `RunSummary` in `process.py`: record the
+  added PUT in the message-Bundle file's outcome (e.g. action `message-bundle (+composition)`)
+  and count it in `submitted/succeeded/failed`; a failed Composition PUT is a file failure
+  (FR-012/FR-014). Confirm the collision detector (T017) now admits the Composition GUID but
+  still excludes the nested document-Bundle fixed id (D4b).
+- [ ] T042 [US4] Confirm/secure FR-021 NIP coverage in `process.py`: a not-in-population
+  scenario (collection Bundle + zero-count MeasureReport, no message Bundle) persists its
+  MeasureReport and clinical resources as first-class with no skip/omission; add a test
+  asserting NIP scenarios are fully processed in `tests/test_transform.py` (FR-021).
+
+### Documentation for User Story 4
+
+- [ ] T043 [P] [US4] Update `contracts/fhir-submission.md` to document the message-Bundle
+  handling: retain whole **and** extract + PUT the `Composition` (D2b/FR-022); promote only the
+  Composition; never re-persist the nested clinical duplicates (spec + data-model already
+  updated; `docs/input-data.md` §6 covers the consumer rationale).
+
+**Checkpoint**: The in-population eICR `Composition` is queryable as a first-class resource;
+the eCR payload is still retained whole; MeasureReport + clinical resources are first-class for
+both populations — the data is SQL-on-FHIR-ready for the DoH analytics team's ViewDefinitions.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -263,6 +329,8 @@ placeholders, fails fast with a message naming the field and a non-zero exit.
     submission pipeline (T026 calls into T015/T016), so if built by one developer, do US1
     then US2. They remain independently testable.
   - US3 (P2) depends only on Foundational (extends config load T009); independent of US1/US2.
+  - US4 (P2) depends on US1 (extends the message-Bundle path T016) + US2 (stamping T025);
+    independent of US3. Its base is already met by US1; net-new work is T040 (Composition).
 - **Polish (Phase 6)**: Depends on the desired user stories being complete.
   - T032 (conformance gate) depends on T036 (pinned IG versions).
   - T016 real (non-dry-run) submission depends on a passing T032.
@@ -275,6 +343,9 @@ placeholders, fails fast with a message naming the field and a non-zero exit.
 - **US2 (P1)**: Foundational only to be testable; its T026 integration step touches the US1
   pipeline. Pure-logic stamping (T023–T025) is independent.
 - **US3 (P2)**: Foundational only. Independent of US1/US2.
+- **US4 (P2)**: Depends on US1 (message-Bundle submission T016) + US2 (stamping T025). The
+  MeasureReport/clinical-resource first-class requirement (FR-020/021) is already delivered by
+  US1; only the eICR `Composition` promotion (T040) and NIP confirmation (T042) are new.
 
 ### Within Each User Story
 
@@ -287,7 +358,7 @@ placeholders, fails fast with a message naming the field and a non-zero exit.
 
 - Setup: T003, T004, T005 in parallel (different files).
 - Foundational: all touch `process.py` → sequential (T006 → T011).
-- Tests within a story run in parallel: [T012, T013] · [T021, T022] · [T027].
+- Tests within a story run in parallel: [T012, T013] · [T021, T022] · [T027] · [T038, T039].
 - Implementation tasks within a story edit `process.py` → sequential.
 - Polish: T030, T031, T033 in parallel (different files); T032/T034 after a runnable processor.
 
@@ -363,3 +434,13 @@ Verified locally: `ruff check` clean; `python3 -m unittest discover -s tests` �
 dry-run over `test/input` classifies all 13 fixtures, `failed=0`, exit `0`; fail-fast
 config validation; and a mocked OAuth2/submit smoke test (token, 401-refresh-once,
 non-2xx → loud failure).
+
+## Phase 7 status note (speckit-tasks, 2026-06-11)
+
+**Phase 7 / User Story 4 (T038–T043) is NOT yet implemented** — it was added after the
+downstream-analytics requirement (Aidbox SQL-on-FHIR) and the OQ-3 resolution to promote the
+eICR `Composition` first-class (FR-022 / research.md D2b). The base of US4 (MeasureReport +
+clinical resources as first-class for both populations, FR-020/021) is already satisfied by the
+implemented US1 persistence; the outstanding code change is the Composition extraction +
+`PUT Composition/<id>` in `process.py` (T040) and its tests/wiring (T038–T042) plus the
+contract doc update (T043). Authoring the `ViewDefinition`s is out of scope (analytics team).

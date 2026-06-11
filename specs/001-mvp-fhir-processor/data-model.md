@@ -101,7 +101,7 @@ Applied to `resource.meta` (additive; never replaces existing `tag`/`profile`):
 
 ---
 
-## Input → Submission transforms (D2)
+## Input → Submission transforms (D2, D2b)
 
 ```text
 collection Bundle ──► transaction Bundle
@@ -115,13 +115,19 @@ MeasureReport (standalone) ──► stamp ──► PUT [base]/MeasureReport/{i
                                           (or single-entry transaction)
 
 message Bundle ──► stamp(bundle.meta) ──► PUT [base]/Bundle/{id}
+              └──► extract nested eICR Composition ──► stamp ──► PUT [base]/Composition/{id}   (D2b)
 ```
 
 **Notes**
-- The nested eICR document bundle inside a message Bundle is persisted as part of the
-  message Bundle resource (not separately unpacked in MVP); its relative references
-  resolve to the resources already persisted from the sibling collection Bundle (same
-  retained GUIDs).
+- The message Bundle is persisted **whole** as the eCR payload of record; its nested
+  resources are not generally unpacked. **Exception (D2b)**: the nested eICR
+  **`Composition`** is *additionally* extracted and persisted as a first-class resource so
+  it is queryable for SQL-on-FHIR analytics (spec FR-022 / US4). Only the Composition is
+  promoted — its id is a GUID and all its references resolve to the clean resources already
+  persisted from the sibling collection Bundle. The document Bundle's nested **clinical
+  resources are NOT re-persisted**: they are lower-fidelity duplicates sharing GUIDs with
+  the collection-bundle copies (e.g. lost time-of-day precision, double-encoded
+  `address.line`), so re-PUTting them would overwrite clean data and trip FR-019.
 - A transaction is server-atomic: any entry failure rejects the whole bundle → that
   file's resources are counted `failed` (D8).
 

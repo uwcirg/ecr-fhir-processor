@@ -75,6 +75,49 @@ individually-queryable resources the user anticipated wanting (spec OQ-2).
 
 ---
 
+## D2b — Promote the eICR `Composition` to a first-class resource (refines D2; resolves spec OQ-3)
+
+**Trigger**: The downstream consumer (state DoH) analyzes persisted data with Aidbox
+**SQL-on-FHIR `ViewDefinition`s**, which flatten **first-class** resources and cannot
+reach into a whole-stored Bundle. The stakeholder needs the eICR **`Composition`** (the
+Public Health Case Report) as a flat table. Under D2 the message Bundle is stored whole,
+so its nested `Composition` is not individually queryable.
+
+**Decision**: When processing an eCR message Bundle, **in addition** to persisting the
+Bundle whole (D2 — it remains the retrievable eCR payload of record, FR-003), **extract
+the nested eICR `Composition` and persist it as a first-class resource**
+(`PUT [base]/Composition/<id>`, stamped like any other resource). Promote **only** the
+`Composition`; do **not** re-persist the document Bundle's other entries.
+
+**Evidence (safe to promote just the Composition)** — spike over all 3 standard fixtures:
+- The `Composition` is the **only** resource in the eICR document Bundle that is **not**
+  already present in the sibling collection Bundle (every clinical resource shares the
+  collection's GUIDs).
+- `Composition.id` is a **GUID**, unique per case (`91110cc3…`, `85384839…`, `bd37ac51…`)
+  — safe to PUT by id. This is *not* the fixed-id landmine of D4b (that concerns the
+  document *Bundle's* measure-named id, not the Composition).
+- **100% of the references inside each Composition** (subject, author, section.entry —
+  6–8 per case) resolve to resources **already persisted from the collection Bundle**. So
+  after promotion the Composition's references resolve to the **clean** copies.
+
+**Why not re-persist the document Bundle's clinical resources**: they are **lower-fidelity
+duplicates** sharing GUIDs with the collection-bundle resources (lost time-of-day
+precision, double-encoded address — see data-model "Input → Submission transforms" and
+`docs/input-data.md` §2). Re-PUTting them by their shared ids would overwrite the clean
+copies and trip the FR-019 collision guard. Promoting only the Composition sidesteps this
+(its refs already point at the clean copies).
+
+**MessageHeader (deferred)**: not promoted in MVP. Its `focus` points at the document
+Bundle (`Bundle/eicr-report-<measure>`, the D4b fixed-id Bundle) which we deliberately do
+**not** persist standalone, so a promoted MessageHeader would carry a dangling `focus`
+reference. Revisit only if analytics needs message-level routing metadata.
+
+**Result for analytics**: a `ViewDefinition` over `Composition` flattens the eICR
+section/narrative structure into a table; `MeasureReport` + the clinical resources remain
+the analytic spine (D2). The whole message Bundle is still retained as the eCR payload.
+
+---
+
 ## D3 — Reference style on the target server
 
 **Decision**: Do **not** rewrite references. Relative references (`Type/<id>`) are kept

@@ -106,6 +106,41 @@ values.
 
 ---
 
+### User Story 4 - Deliver records for downstream SQL-on-FHIR analytics (Priority: P2)
+
+A state Department of Health analytics team consumes the persisted data from **Aidbox**
+using **SQL-on-FHIR `ViewDefinition`s** to build flat tables. They need **every record**
+— in-population cases (whose eCR payload is the message Bundle) **and** not-in-population
+cases — represented as **queryable, first-class FHIR resources** so a ViewDefinition can
+flatten them. Of particular interest are each case's numerator/denominator membership
+(from its MeasureReport) and the eICR **Composition** (the Public Health Case Report).
+
+**Why this priority**: The persisted data's downstream purpose is analytics. If a record
+lands in a shape SQL-on-FHIR cannot flatten (e.g., trapped inside an opaque, whole-stored
+Bundle), the analytics team cannot consume it — defeating the reason the data was
+persisted.
+
+**Independent Test**: After a run against the fixtures, define a `ViewDefinition` over
+`MeasureReport` and confirm it yields one row per case — for both in-population and
+not-in-population scenarios — carrying the measure and population counts; confirm the
+referenced clinical resources are independently queryable and join to that row by patient.
+
+**Acceptance Scenarios**:
+
+1. **Given** records persisted by a run, **When** a `ViewDefinition` selects over
+   `MeasureReport`, **Then** every case (in-population and not-in-population) yields a row
+   carrying its `measure` and population counts (initial-population/denominator/numerator/
+   exclusion).
+2. **Given** a not-in-population case (no eCR payload), **When** the analytics team builds
+   their tables, **Then** the case is still represented via its zero-count MeasureReport
+   and its collection-bundle clinical resources as first-class, queryable resources.
+3. **Given** an in-population case, **When** its eCR payload is persisted, **Then** the
+   payload is retained whole **and** the eICR `Composition` is additionally persisted as a
+   first-class, queryable resource (FR-022), so a `ViewDefinition` over `Composition` can
+   flatten it.
+
+---
+
 ### Edge Cases
 
 - **Unreachable / unauthenticated server**: The processor fails loudly with a clear
@@ -201,6 +236,24 @@ values.
   reused across scenarios) are expected deduplication and MUST NOT be treated as errors.
   This protects against silent data loss from non-unique/fixed resource ids in the source
   data (e.g., measure-named eICR document Bundle ids reused across patients).
+- **FR-020**: The system MUST persist records so that each case's measure-evaluation
+  (MeasureReport) and clinical resources land as **first-class, individually queryable
+  FHIR resources** on the target server (Aidbox), enabling downstream SQL-on-FHIR
+  `ViewDefinition`s to flatten them into analytics tables. This applies to **both**
+  in-population and not-in-population cases.
+- **FR-021**: Not-in-population cases — which have no eCR message Bundle — MUST still be
+  represented for analytics via their (zero-count) MeasureReport and their collection-
+  bundle clinical resources; the absence of an eCR payload MUST NOT cause a NIP case to
+  be skipped or omitted from what lands on the server.
+- **FR-022**: For each in-population eCR message Bundle, in addition to persisting the
+  Bundle whole (FR-003), the system MUST extract the nested eICR `Composition` and persist
+  it as a first-class, queryable resource under its own id, so SQL-on-FHIR can flatten it
+  (US4, OQ-3). The system MUST promote **only** the `Composition` and MUST NOT re-persist
+  the message Bundle's other nested resources — the eICR's clinical resources are
+  lower-fidelity duplicates sharing `(resourceType, id)` with the collection-bundle
+  resources, and re-persisting them would overwrite the clean copies and trip FR-019. (The
+  Composition's id is unique and its references resolve to the already-persisted
+  collection-bundle resources.)
 
 ### Key Entities *(include if data involved)*
 
@@ -286,8 +339,15 @@ values.
   for provenance purposes given FR-006; the plan will reconcile the example config
   with the runtime-derived version (the user explicitly does not want the stamped
   version hard-coded there).
+- **Target server & downstream analytics**: The target FHIR server is **Aidbox**. The
+  persisted data's downstream consumer is a **state Department of Health** analytics team
+  that queries it with **SQL-on-FHIR `ViewDefinition`s** (flattening first-class resources
+  into tables). This is why the persistence granularity (OQ-2/D2) — first-class resources
+  vs. whole Bundles — matters beyond MVP submission: it determines what is analyzable
+  downstream (see US4, FR-020/021, OQ-3).
 - **Out of scope for MVP**: Generating or transforming eCR content, computing
-  MeasureReports, depression-screening (CMS2) fixtures (folders are empty
+  MeasureReports, authoring the downstream `ViewDefinition`s themselves (the analytics
+  team owns those), depression-screening (CMS2) fixtures (folders are empty
   placeholders), and any non-conformance remediation beyond loud failure are not part
   of this MVP.
 
@@ -314,6 +374,20 @@ are processed.
   until processing representative files reveals the necessary patterns. The current
   scope decision ("persist all input bundles") fixes *which* inputs are in scope; this
   question is about the *granularity* of what lands on the server.
+- **OQ-3 — Expose the eICR `Composition` for SQL-on-FHIR? (refines OQ-2/D2)**: The
+  downstream consumer (US4) analyzes data via Aidbox SQL-on-FHIR `ViewDefinition`s, which
+  flatten **first-class** resources and **cannot** reach into a whole-stored Bundle. Under
+  the current decision (research.md D2) the eCR message Bundle is persisted whole, so its
+  nested eICR `Composition` / `MessageHeader` are **not** individually queryable. **Open:**
+  should the processor unpack the message Bundle's document Bundle to persist the
+  `Composition` (and `MessageHeader`) as first-class resources? **Constraint if yes:**
+  promote **only** those genuinely-new, GUID-keyed resources — do **NOT** re-persist the
+  eICR's nested clinical resources, which are lower-fidelity duplicates sharing GUIDs with
+  the clean collection-bundle copies (re-persisting them would overwrite good data and trip
+  FR-019). Resolve after confirming with the consumer whether the Composition is needed as
+  a flat table for MVP. **Resolved (2026-06-11): yes** — promote the eICR `Composition` to
+  a first-class resource (promote only the Composition; do not re-persist the nested
+  clinical duplicates). See FR-022 and research.md **D2b**.
 
 > Note: These open questions do not block writing the spec, but they should be settled
 > in `/speckit-plan` (likely via a short data-inspection spike against real/`test`
@@ -321,7 +395,9 @@ are processed.
 
 ## Dependencies
 
-- A reachable target FHIR R4 server with OAuth2 client-credentials authentication.
+- A reachable target FHIR R4 server (**Aidbox**) with OAuth2 client-credentials
+  authentication, whose SQL-on-FHIR capability the downstream DoH analytics team uses to
+  build tables via `ViewDefinition`s (US4).
 - The canonical input fixtures under `test/input/` (and the input-shape definitions in
   `docs/CDS_TestData_DocumentationFor05252026zip.pdf`).
 - The project constitution (`.specify/memory/constitution.md`), whose principles

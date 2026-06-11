@@ -38,16 +38,16 @@ bundles the processor would submit.
 ```bash
 # Processor writes the would-be submissions to output/ during a dry run:
 python3 process.py --input-dir test/input --dry-run --output-dir output
-# Validate them (IG versions come from config.ig_versions):
-java -jar validator_cli.jar "output/**/*.json" -version 4.0.1 \
-  -ig hl7.fhir.us.ecr#$ECR_IG_VERSION \
-  -ig hl7.fhir.us.core#$US_CORE_VERSION \
-  -ig hl7.fhir.us.davinci-deqm#$DEQM_VERSION \
-  -ig <aphl-chronic-ds-package>
+# Delta gate: validates output with the pinned IG set (config.ig_versions) and fails only
+# on validator errors introduced vs. the committed source baseline.
+scripts/validate.sh "output/**/*.json" config.example.json
 ```
 
-**Expected**: zero project-introduced errors (warnings OK; documented known issues
-filtered per `known-validation-issues.md`).
+**Expected**: `PASS` — zero project-introduced errors vs. `test/conformance-baseline.sigs`
+(warnings OK; the supplier's inherent source errors are the baseline, and documented known
+issues are filtered per `known-validation-issues.md`). Regenerate the baseline with
+`scripts/validate.sh --update-baseline "test/input/**/*.json" config.example.json` when the
+fixtures or pinned IG versions change.
 
 ## Scenario C — Persist to a FHIR server (gate 2)
 

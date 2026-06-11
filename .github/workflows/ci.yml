@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    name: Lint, unit tests, dry-run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      # Dev-only tool — the processor itself has zero runtime dependencies
+      # (constitution: Zero-Dependency Runtime).
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Lint (ruff)
+        run: ruff check process.py tests/
+
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -v
+
+      # Discovery + classification + stamping + collection->transaction transform over
+      # the canonical fixtures. Must classify every fixture, failed=0, exit 0.
+      - name: Dry-run over test fixtures
+        run: python3 process.py --input-dir test/input --dry-run --verbose --output-dir output
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Constitution: Secret Protection. Reject committed real config / secret files.
+      - name: Reject committed secrets
+        run: |
+          set -euo pipefail
+          if git ls-files | grep -E '(^|/)config\.json$|\.secret|(^|/)\.env$' ; then
+            echo "ERROR: a secret/real-config file is tracked in git. Remove it and add to .gitignore." >&2
+            exit 1
+          fi
+          echo "OK: no config.json / *.secret* / .env tracked."
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  conformance-gate:
+    name: FHIR conformance gate (HL7 validator)
+    runs-on: ubuntu-latest
+    # Delta gate: validates the would-be submissions against the supplier's pinned IG set
+    # and fails only on validator errors the transform INTRODUCES vs. the committed source
+    # baseline (test/conformance-baseline.sigs). See scripts/validate.sh.
+    timeout-minutes: 30
+    needs: lint-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # PIN the validator version. The committed conformance baseline
+      # (test/conformance-baseline.sigs) is tied to a specific validator's exact error
+      # wording, so "latest" would drift and cause false "introduced error" failures.
+      # Bump this together with a `--update-baseline` regeneration.
+      - name: Pin FHIR validator version
+        run: echo "FHIR_VALIDATOR_VERSION=6.9.9" >> "$GITHUB_ENV"
+
+      # Cache the (pinned) validator jar and its package cache (~/.fhir) so we don't
+      # re-download the IG packages on every run. Pattern from
+      # uwcirg/wahealth-csv-to-safr-fhir. The key includes the validator version and a hash
+      # of the config so the cache refreshes when either the validator or the pinned IG set
+      # (config.example.json.ig_versions) changes.
+      - name: Cache FHIR validator
+        uses: actions/cache@v4
+        with:
+          path: |
+            validator_cli.jar
+            ~/.fhir
+          key: fhir-validator-${{ runner.os }}-${{ env.FHIR_VALIDATOR_VERSION }}-${{ hashFiles('config.example.json') }}
+          restore-keys: |
+            fhir-validator-${{ runner.os }}-${{ env.FHIR_VALIDATOR_VERSION }}-
+
+      - name: Download FHIR validator
+        run: |
+          if [ ! -f validator_cli.jar ]; then
+            curl -fL -o validator_cli.jar \
+              "https://github.com/hapifhir/org.hl7.fhir.core/releases/download/${FHIR_VALIDATOR_VERSION}/validator_cli.jar"
+          fi
+
+      - name: Produce would-be submissions (dry-run)
+        run: python3 process.py --input-dir test/input --dry-run --output-dir output
+
+      # Delta gate: fails only on validator errors introduced vs. the committed source
+      # baseline. Regenerate the baseline with `scripts/validate.sh --update-baseline`
+      # when the fixtures or pinned IG versions change.
+      - name: Validate with versioned IG packages (delta vs. source baseline)
+        run: scripts/validate.sh "output/**/*.json" config.example.json

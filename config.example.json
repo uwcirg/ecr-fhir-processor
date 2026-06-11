@@ -1,7 +1,6 @@
 {
   "software": {
     "name": "ecr-fhir-processor",
-    "version": "1.0.0",
     "identifier_system": "urn:oid:2.16.840.1.113883.3.2",
     "identifier_value": "ecr-fhir-processor"
   },
@@ -10,5 +9,18 @@
     "token_endpoint": "YOUR_TOKEN_ENDPOINT",
     "client_id": "YOUR_CLIENT_ID",
     "client_secret": "YOUR_CLIENT_SECRET"
+  },
+  "ig_versions": {
+    "hl7.fhir.us.core": "6.1.0",
+    "hl7.fhir.us.qicore": "4.1.1",
+    "hl7.fhir.us.cqfmeasures": "3.0.0",
+    "hl7.fhir.us.davinci-deqm": "5.0.0",
+    "hl7.fhir.us.ecr": "2.1.2",
+    "hl7.fhir.us.ph-library": "2.0.0"
+  },
+  "paths": {
+    "input_dir": "input",
+    "output_dir": "output",
+    "log_dir": "log"
   }
 }

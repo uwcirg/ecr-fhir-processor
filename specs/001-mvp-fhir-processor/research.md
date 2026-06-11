@@ -35,43 +35,94 @@ than duplicated. Minting new ids would (a) break the relative references (see D2
 
 ---
 
-## D2 — Persistence granularity (resolves OQ-2)
+## D2 — Persistence granularity & mechanism (resolves OQ-2; constitution v1.1.0 Principles VI + V)
 
 **Decision**: Persist the **contained resources** of each collection Bundle as
-first-class resources, by converting the `collection` Bundle into a `transaction`
-Bundle where each entry carries `request.method = PUT` and
-`request.url = <ResourceType>/<id>`, then POSTing the transaction to `[base]`.
+first-class resources, each via its **own independent** `PUT [base]/<ResourceType>/<id>`
+— **not** wrapped in a server-atomic `transaction` Bundle. Each resource (and each input
+kind) is an independent unit of work whose success or failure is isolated from the others
+(constitution Principle V — "Independent persistence (no global transaction)"; Principle
+VI — analytics-ready granularity).
+
+**Why the change from a transaction Bundle** (this supersedes the earlier MVP draft, which
+converted the collection Bundle into one atomic `transaction`):
+
+- The downstream SQL-on-FHIR consumer requires every contained resource to be a queryable
+  first-class resource (Principle VI) — satisfied by either mechanism, but…
+- …the target Aidbox server currently **rejects the test MeasureReports** on validation.
+  Inside one atomic `transaction`, a single rejected entry rolls back *every* resource in
+  that bundle — so one bad MeasureReport would block the Patient/Encounter/Observation/etc.
+  that validate cleanly. Independent PUTs isolate the failure to just the offending
+  resource(s) (amended Principle V).
+- It also lets a problem resource type be persisted in a **separate later run** (e.g.,
+  MeasureReports after Aidbox validation is relaxed) without re-sending or rolling back
+  what already landed (see D10).
+
+**Mechanism**: individual `PUT [base]/<Type>/<id>` per resource. A FHIR **`batch`** Bundle
+(which is **non-atomic** — per-entry success, no rollback) is an acceptable round-trip
+optimization *because it preserves per-entry isolation*; a **`transaction`** Bundle is
+**not** permitted for multi-resource persistence (it reintroduces all-or-nothing).
 
 **Evidence**:
 
 - Inter-resource references inside the collection bundle are **relative**:
   `Condition.subject → "Patient/4865655a-..."`, `Encounter.participant →
-  "Practitioner/b2360d5d-..."`, etc.
-- Collection bundles carry **no** `entry.request` and `type = "collection"` — they are
-  not directly transactable as-is.
-
-**Rationale**: For relative references to resolve on the target server, each referenced
-resource must exist at `[base]/<Type>/<id>`. Converting to a transaction Bundle of PUTs
-persists every contained resource at its retained id atomically, makes the relative
-references resolve, and preserves update-in-place semantics. This honors the user's
-"persist all input bundles" intent (nothing is dropped) while delivering the
-individually-queryable resources the user anticipated wanting (spec OQ-2).
+  "Practitioner/b2360d5d-..."`, etc. Each referenced resource must therefore exist at
+  `[base]/<Type>/<id>` — which independent PUTs (retained ids, D1) satisfy.
+- Collection bundles carry **no** `entry.request` and `type = "collection"`, so they are
+  not directly submittable as-is; the processor iterates `entry[].resource` and PUTs each.
 
 **Per input type**:
 | Input file | type | Persistence action |
 |------------|------|--------------------|
-| Collection Bundle (`CMS*_*.json`) | `collection` | Convert → `transaction` of PUTs; stamp each entry resource; POST `[base]` |
-| MeasureReport (`MeasureReport_*.json`) | individual | Stamp; PUT `[base]/MeasureReport/<id>` (or single-entry transaction) |
-| eCR message Bundle (`Bundle_*.json`) | `message` | Stamp the Bundle's `meta`; PUT `[base]/Bundle/<id>` |
+| Collection Bundle (`CMS*_*.json`) | `collection` | Stamp each contained resource; **independent** `PUT [base]/<Type>/<id>` per resource (or non-atomic `batch`); failures isolated per resource |
+| MeasureReport (`MeasureReport_*.json`) | individual | Stamp; `PUT [base]/MeasureReport/<id>` — independently (often a separate run; see D10) |
+| eCR message Bundle (`Bundle_*.json`) | `message` | Stamp the Bundle's `meta`; `PUT [base]/Bundle/<id>` (wrapper GUID). **Plus** promote the nested eICR Composition — see D2b |
 
 **Alternatives considered**:
+- *Atomic `transaction` Bundle (the earlier MVP draft)* — **rejected now**: all-or-nothing
+  rollback means one rejected resource type (MeasureReport) defeats the whole scenario;
+  violates amended Principle V (independent persistence).
 - *Store the collection Bundle as one opaque `Bundle` resource* — rejected: relative
-  references would not resolve to queryable resources; surveillance queries
-  (e.g., find this run's Patients) would not work.
+  references would not resolve to queryable resources; surveillance/analytics queries
+  (e.g., find this run's Patients) would not work (Principle VI).
 - *Submit the eCR message Bundle to `$process-message`* — deferred beyond MVP; that
   operation triggers message-processing workflows on the server we don't control. MVP
   persists it as a retrievable `Bundle` resource. (Revisit if the destination requires
   `$process-message` ingestion.)
+
+---
+
+## D2b — Promote the eICR Composition to a first-class resource (constitution Principle VI)
+
+**Decision**: For in-population scenarios carrying an eCR message Bundle
+(`Bundle_<uuid>.json`), extract the nested eICR **`Composition`** and persist it
+independently — stamp it and `PUT [base]/Composition/<id>` — **in addition to** persisting
+the message Bundle whole (D2). **Only** the Composition is promoted.
+
+**Why**: SQL-on-FHIR `ViewDefinition`s can flatten only first-class resources; the eICR
+**Composition** (the artifact the downstream DoH analytics team cares about most) was
+otherwise trapped inside the stored message Bundle and unqueryable.
+
+**No fidelity regression (Principles VI + V)**: Do **not** promote the eICR's other nested
+clinical resources — they are lower-fidelity duplicates (e.g., Observation
+`effectiveDateTime` loses time-of-day; `Patient.address.line` double-JSON-encoded) of the
+authoritative collection-Bundle resources already persisted under the same GUIDs.
+Re-persisting them would overwrite clean data (and could trip the FR-019 collision guard).
+The `MessageHeader` stays nested (its `focus` is the fixed-id document Bundle).
+
+**Safety**: The Composition's `id` is a **per-case GUID** (unique), so
+`PUT [base]/Composition/<id>` is collision-safe (unlike the document Bundle's fixed
+template-handle id — see D4b). Its references (`subject`/`encounter`/`author`/
+`section.entry`) resolve to the clean collection-Bundle resources (same retained GUIDs).
+Guardrail: log a WARNING for any Composition reference that does not resolve to a persisted
+resource (consistent with D3); do not mutate it.
+
+**Alternatives considered**:
+- *Promote all nested eICR resources* — rejected: overwrites authoritative clinical data
+  with degraded duplicates (fidelity regression; Principle V).
+- *Persist only the Composition and drop the message Bundle* — rejected: we keep the whole
+  eCR payload for provenance and **add** the Composition, not replace it.
 
 ---
 
@@ -285,15 +336,21 @@ config and expose them as constants for the validator invocation.
 **Decision**:
 - Malformed/unreadable input file → log WARNING, skip file, increment `skipped`,
   continue.
-- Server rejects a submission (non-2xx) → log ERROR with server `OperationOutcome`,
-  increment `failed`, do **not** count as persisted.
-- Transaction Bundle partial semantics: a `transaction` is atomic server-side; a 4xx/5xx
-  means the whole bundle was rejected — count its resources as failed for that file.
+- Server rejects a **single resource** (non-2xx on its `PUT`) → log ERROR with the server
+  `OperationOutcome`, increment `failed` for that resource, do **not** count it as
+  persisted, and **continue with the remaining resources** — siblings are not rolled back
+  (independent persistence, D2; amended Principle V). There is no all-or-nothing transaction
+  whose rejection fails an entire scenario.
+- When a non-atomic `batch` Bundle is used as the round-trip optimization (D2), failures are
+  read **per entry** from the batch-response Bundle (each entry's status), not as a single
+  bundle-level outcome.
+- A resource type the operator deliberately deferred via `--skip-types` (D10) is counted
+  `skipped`, not `failed`.
 - Exit code: `0` only if `failed == 0`; otherwise non-zero. A run that processed nothing
-  (empty input) exits `0` and reports "nothing processed".
+  (empty input, or everything skipped) exits `0` and reports what was skipped.
 
-**Rationale**: Loud-not-silent (Principle V); reflects failures in exit status (FR-012,
-FR-014).
+**Rationale**: Loud-not-silent and failure-isolated (amended Principle V); reflects failures
+in exit status (FR-012, FR-014) without letting one bad resource block the rest.
 
 ---
 
@@ -309,19 +366,55 @@ aids troubleshooting of what was actually sent.
 
 ---
 
+## D10 — Independent, selectable persistence by resource type (constitution v1.1.0 Principle V)
+
+**Decision**: Persistence is runnable **per resource type / kind** so a problem type can be
+landed separately. Add CLI filters `--only-types` / `--skip-types` (comma-separated FHIR
+resourceTypes; also accept the kind alias `measure-report`). Default (neither flag): persist
+everything.
+
+**Driving case**: The test **MeasureReports currently fail Aidbox validation**. The operator
+runs `--skip-types MeasureReport` first to land all conformant resources, then — after the
+Aidbox validation profile is relaxed (may require a server restart) — runs
+`--only-types MeasureReport` to land just those. Because every write is an idempotent
+`PUT`-by-id (D1) and nothing is wrapped in a shared transaction (D2), the second run neither
+duplicates nor rolls back the first run's resources.
+
+**Rationale**: Directly realizes amended Principle V (independent, isolated, re-runnable
+persistence per type). Keeps the conformant majority flowing while a single type is worked
+out of band.
+
+**Alternatives considered**:
+- *Hard-code skipping MeasureReports* — rejected: config-over-code; the relaxation is a
+  temporary, operator-driven condition, not a permanent code rule.
+- *One `transaction` with a "continue on error" mode* — not a standard FHIR transaction
+  option; the non-atomic `batch` (D2) already gives per-entry isolation, and per-type runs
+  give the operator explicit control over ordering.
+
+---
+
 ## Summary of decisions
 
 | ID | Decision |
 |----|----------|
 | D1 | Retain original GUID `resource.id`; PUT (update-in-place) |
-| D2 | Persist contained resources via collection→transaction(PUT); MeasureReport & message Bundle PUT by id |
-| D3 | Don't rewrite references; warn on non-target absolute refs |
+| D2 | Persist contained resources as **independent** `PUT`s per resource (non-atomic `batch` OK; **no** `transaction`); MeasureReport & message Bundle PUT by id — each an isolated unit of work (Principles VI + V) |
+| D2b | **Promote the nested eICR `Composition`** to a first-class resource (`PUT [base]/Composition/<GUID id>`) in addition to the message Bundle; promote **only** the Composition (no fidelity regression on the clean collection-Bundle resources) (Principle VI) |
+| D3 | Don't rewrite references; warn on non-target absolute refs (and on any unresolved promoted-Composition ref) |
 | D4 | Provenance via searchable `meta.tag` (processed-by+version / processed-on / source-file) + `meta.source` |
 | D4b | The nested eICR document Bundle's fixed `Bundle.id` (`eicr-report-ChronicDSDiabetesPoorControl`) is a template handle, **not** identity — identity is per-case `Bundle.identifier`. Any standalone persist MUST upsert via conditional-update-by-`identifier`, never PUT-by-id. Generic guard: detect same-`(type,id)`/differing-content collisions and fail loudly |
 | D5 | Version from `git describe --tags --always --dirty`; fallback `unknown` |
 | D6 | OAuth2 client-credentials, stdlib `urllib`, in-memory token |
 | D7 | Reconcile `config.example.json`: drop `software.version`, add `ig_versions` + `paths`; reject placeholders |
-| D8 | Warn-skip malformed; fail-loud on rejection; non-zero exit on any failure |
+| D8 | Warn-skip malformed; fail-loud on rejection **per resource** (isolated, no sibling rollback); non-zero exit on any failure |
 | D9 | Output mirror by measure/date; dual console+file logging |
+| D10 | **Independent, selectable persistence by type** via `--only-types`/`--skip-types`, so MeasureReports can be landed in a separate run after Aidbox validation is relaxed (Principle V) |
 
 All spec NEEDS-CLARIFICATION / Open Questions are resolved. Ready for Phase 1.
+
+> **Spec follow-up (not blocking this plan):** D2b (Composition promotion) and D2/D10
+> (independent per-type persistence) extend beyond the requirements written in `spec.md`
+> (which stops at FR-019 / OQ-1, OQ-2). They are mandated by the amended constitution
+> (v1.1.0, Principles VI + V). Run `/speckit-specify` to formalize them as explicit
+> functional requirements (e.g., an FR for first-class Composition promotion and an FR for
+> independent, isolated, re-runnable per-type persistence) so the spec and plan re-converge.

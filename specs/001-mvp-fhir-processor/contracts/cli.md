@@ -7,6 +7,7 @@ surface and the config schema it consumes. (Stable interface for users and CI.)
 
 ```text
 python3 process.py [--config PATH] [--input-dir PATH] [--measure NAME]
+                   [--only-types LIST] [--skip-types LIST]
                    [--output-dir PATH] [--no-output-mirror] [--dry-run]
                    [--log-dir PATH] [--verbose]
 ```
@@ -16,11 +17,20 @@ python3 process.py [--config PATH] [--input-dir PATH] [--measure NAME]
 | `--config` | `config.json` | Path to the run config (template: `config.example.json`). |
 | `--input-dir` | `config.paths.input_dir` (`input`) | Root of the input tree to process. |
 | `--measure` | all | Restrict to one measure folder (`poor-diabetic-control`, `controllable-bp`, `depression-screening`). |
+| `--only-types` | all | Comma-separated FHIR resourceTypes to persist **exclusively** this run (e.g., `MeasureReport`). Accepts the `measure-report` kind alias. Mutually exclusive with `--skip-types`. (D10) |
+| `--skip-types` | none | Comma-separated FHIR resourceTypes to **exclude** this run (excluded resources counted `skipped`). E.g., `--skip-types MeasureReport` to land everything else first. (D10) |
 | `--output-dir` | `config.paths.output_dir` (`output`) | Where the submitted-JSON mirror is written. |
 | `--no-output-mirror` | off | Skip writing the local output mirror. |
 | `--dry-run` | off | Discover, classify, stamp, and transform, but do **not** submit. Prints the RunSummary. Used by CI/validator gate. |
 | `--log-dir` | `config.paths.log_dir` (`log`) | Audit-log directory. |
 | `--verbose` | off | Console DEBUG verbosity (file log is always detailed). |
+
+> **Independent per-type runs (D10, constitution Principle V).** Because every write is an
+> idempotent `PUT`-by-id and nothing is wrapped in a shared transaction, resource types can be
+> persisted in separate runs. Canonical example: the target Aidbox currently rejects the test
+> MeasureReports, so persist everything else first (`--skip-types MeasureReport`), relax the
+> Aidbox validation profile (may require a server restart), then persist just those
+> (`--only-types MeasureReport`). The second run neither duplicates nor rolls back the first.
 
 ## Behavior contract
 

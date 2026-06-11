@@ -106,6 +106,44 @@ values.
 
 ---
 
+### User Story 4 - Make persisted eCR content queryable for downstream analytics (Priority: P1)
+
+A state Department of Health analytics team consumes the persisted data by authoring
+SQL-on-FHIR `ViewDefinition`s that flatten stored resources into analytic tables. Their
+tooling can flatten only **first-class, individually-addressable** resources on the FHIR
+server — it cannot reach into a resource stored opaquely inside a Bundle. They need each
+clinical resource from a scenario, and the eICR **Composition** for in-population cases, to
+be retrievable on its own so it is analyzable.
+
+**Why this priority**: This is the reason the persistence-granularity decision exists.
+Storing each scenario as one opaque Bundle would put the clinical content out of reach of
+the downstream analytics, defeating the purpose of persisting it. What is persisted as a
+first-class resource is what is analyzable downstream.
+
+**Independent Test**: After a processing run, query the server for an individual contained
+resource (e.g., a specific Patient or Observation from a scenario) and, for an in-population
+scenario, for the eICR Composition by its id; confirm each returns as a standalone resource,
+not only as part of a stored Bundle.
+
+**Acceptance Scenarios**:
+
+1. **Given** a collection Bundle has been persisted, **When** the analytics consumer queries
+   for a contained resource type (e.g., all Observations this run wrote), **Then** each
+   contained resource is returned individually as a first-class resource, not only nested
+   inside a stored Bundle.
+2. **Given** an in-population scenario (with an eCR message Bundle) has been persisted,
+   **When** the consumer retrieves the eICR Composition by its id, **Then** it is returned
+   as a standalone, first-class resource.
+3. **Given** the eICR's nested clinical resources are lower-fidelity duplicates of the
+   collection Bundle's resources, **When** the consumer queries those clinical resources,
+   **Then** the results reflect the authoritative (higher-fidelity) collection-Bundle
+   content, never overwritten by the eICR's degraded copies.
+4. **Given** one resource type was rejected by the server during a run, **When** the consumer
+   queries the other resource types from that run, **Then** they are present and queryable —
+   the rejection of one type did not block persistence of the others.
+
+---
+
 ### Edge Cases
 
 - **Unreachable / unauthenticated server**: The processor fails loudly with a clear
@@ -122,6 +160,20 @@ values.
   `versionId`).
 - **Server accepts some bundles and rejects others**: Each outcome is reported
   individually; overall exit status reflects that at least one failure occurred.
+- **Server rejects one resource type while accepting the rest** (e.g., it rejects the test
+  MeasureReports on validation): The rejected resources are reported failed and are **not**
+  counted as persisted, but every other resource type still persists — there is no
+  all-or-nothing transaction that lets one rejected type undo or block the others. The exit
+  status reflects the failure.
+- **Operator persists resource types in separate runs**: When the operator chooses to
+  persist only a subset of resource types in a run (e.g., everything except a type the
+  server currently rejects), the excluded resources are reported **skipped** (not failed),
+  and a later run for just that type — after the server's validation rules are relaxed —
+  persists it without creating duplicates or disturbing the resources already persisted.
+- **Promoted eICR Composition references an unresolved resource**: If the eICR Composition
+  references a resource that was not persisted, the processor logs a WARNING (it does not
+  fabricate or mutate the reference); the Composition is still persisted as a first-class
+  resource.
 - **Two different resources share the same identity** (e.g., the fixed-id eICR document
   Bundle `eicr-report-ChronicDSDiabetesPoorControl` is reused across different patients
   with different content): The processor MUST NOT silently let one overwrite the other.
@@ -143,9 +195,11 @@ values.
   and is not the source or destination for real data.
 - **FR-002**: The system MUST submit every input bundle to the configured target FHIR
   server, persisting the resources it contains.
-- **FR-003**: The system MUST process all bundle files present in each scenario folder
-  as-is — the collection Bundle, the MeasureReport, and (when present) the eCR message
-  Bundle — without selectively dropping any of them.
+- **FR-003**: By default, the system MUST process all bundle files present in each scenario
+  folder as-is — the collection Bundle, the MeasureReport, and (when present) the eCR message
+  Bundle — without selectively dropping any of them. (An operator MAY deliberately scope a run
+  to a subset of resource types per FR-023; excluded resources are reported skipped, not
+  dropped silently.)
 - **FR-004**: Before persistence, the system MUST add metadata to the FHIR resources
   it processes that records: (a) that this software performed the processing,
   (b) the software version, (c) the processing timestamp, and (d) the name of the
@@ -201,6 +255,28 @@ values.
   reused across scenarios) are expected deduplication and MUST NOT be treated as errors.
   This protects against silent data loss from non-unique/fixed resource ids in the source
   data (e.g., measure-named eICR document Bundle ids reused across patients).
+- **FR-020**: The system MUST persist the resources contained in each collection Bundle as
+  **independent, individually-addressable** resources on the FHIR server — each retrievable
+  and searchable on its own — rather than storing the collection Bundle as a single opaque
+  artifact. (This resolves OQ-2: persistence granularity is the contained resources, not the
+  whole Bundle.)
+- **FR-021**: For in-population scenarios that include an eCR message Bundle, the system MUST
+  additionally persist the eICR **Composition** contained within it as an independent,
+  individually-addressable resource, **in addition to** persisting the eCR message Bundle
+  itself. The system MUST promote **only** the Composition from the eCR message Bundle; it
+  MUST NOT re-persist the eCR's other nested clinical resources (which are lower-fidelity
+  duplicates) over the authoritative resources already persisted from the collection Bundle.
+- **FR-022**: The system MUST persist resources **without wrapping them in a single
+  all-or-nothing transaction**. A validation or acceptance failure affecting one resource
+  type MUST NOT block, undo, or roll back the persistence of the other resource types; each
+  failure MUST be isolated to its own resource(s), surfaced (logged and reflected in exit
+  status), while the unaffected resources still persist.
+- **FR-023**: The system MUST allow an operator to persist resource types **independently
+  across separate runs** — for example, excluding a resource type the server currently
+  rejects and persisting it in a later run after the server's validation rules are relaxed.
+  Such a per-type re-run MUST be idempotent: it MUST NOT create duplicates of, or roll back,
+  resources already persisted by earlier runs. Resource types deliberately excluded from a
+  run MUST be reported as **skipped** (distinct from failed).
 
 ### Key Entities *(include if data involved)*
 
@@ -209,8 +285,21 @@ values.
   `depression-screening`/CMS2) and population outcome (Standard vs. Not-In-Population).
   Contains one or more FHIR bundle files. (The parallel structure under `test/input/`
   is development fixtures only.)
-- **FHIR Bundle**: The unit read from input and submitted to the server — a collection
-  Bundle of clinical resources, a MeasureReport, or an eCR message Bundle.
+- **FHIR Bundle**: The unit read from input — a collection Bundle of clinical resources, a
+  MeasureReport, or an eCR message Bundle. Note: a collection Bundle is *unpacked* into its
+  contained resources for persistence (FR-020); it is not itself stored as one opaque
+  artifact.
+- **First-Class Persisted Resource**: An individual resource that lands on the FHIR server
+  under its own identity and is independently retrievable/searchable — the contained
+  resources of a collection Bundle (FR-020) and the promoted eICR Composition (FR-021).
+  This is the unit the downstream analytics consumer can flatten.
+- **Promoted eICR Composition**: The Composition extracted from an in-population eCR message
+  Bundle and persisted as its own first-class resource (FR-021). Only the Composition is
+  promoted; the eICR's other nested clinical copies (lower-fidelity duplicates) are not.
+- **Downstream Analytics Consumer**: A state Department of Health analytics team that queries
+  the FHIR server with SQL-on-FHIR `ViewDefinition`s to flatten stored resources into tables.
+  It can flatten only first-class resources, which is why persistence granularity (FR-020/
+  FR-021) is a requirement rather than an implementation detail.
 - **Processing Metadata**: Additive provenance attached to resources before
   persistence — identifies this software as processor, its runtime-derived version,
   the processing timestamp, and the source JSON filename; designed to be searchable on
@@ -248,6 +337,17 @@ values.
   a clear message and a non-zero exit status.
 - **SC-007**: A new operator can go from `config.example.json` to a successful run by
   editing only the configuration file (no source-code edits).
+- **SC-009**: After a run, the analytics consumer can retrieve any individual contained
+  clinical resource (e.g., a specific Patient, Observation, or Condition from a scenario) as
+  a standalone resource via a single query — none are reachable only inside an opaque stored
+  Bundle.
+- **SC-010**: After persisting an in-population scenario, the eICR Composition is retrievable
+  as a standalone resource, and the authoritative collection-Bundle clinical resources are
+  byte-for-byte unchanged by that promotion (no lower-fidelity overwrite).
+- **SC-011**: In a run where the server rejects one resource type, 100% of the accepted
+  types are still persisted; only the rejected resources are reported failed; and persisting
+  the rejected type in a later run leaves the previously-persisted resource count unchanged
+  (no duplicates).
 
 ## Assumptions
 
@@ -259,9 +359,24 @@ values.
   are supplied (CLI argument and/or config) is a plan-level detail, since
   `config.example.json` currently carries only server and software-identity fields.
 - **Persistence scope (which bundles)**: Per the user's decision, the MVP persists
-  **all input bundles** (collection Bundle, MeasureReport, and eCR message Bundle when
-  present) and does not selectively drop any. Whether each bundle is persisted whole or
-  unpacked into its constituent resources is an Open Question (see below).
+  **all input content** (collection Bundle, MeasureReport, and eCR message Bundle when
+  present) and does not selectively drop any. The **granularity** is now settled (OQ-2
+  RESOLVED): a collection Bundle is unpacked into its contained resources, each persisted as
+  a first-class resource (FR-020); the eCR message Bundle is persisted whole **and** its
+  eICR Composition is promoted to first-class (FR-021). The operator may persist different
+  resource types in different runs (FR-023), but the default run persists everything.
+- **Downstream analytics consumer (granularity driver)**: The primary consumer of the
+  persisted data is a state Department of Health analytics team authoring SQL-on-FHIR
+  `ViewDefinition`s over the target server (Aidbox). Because that tooling can flatten only
+  first-class resources, persistence granularity (FR-020/FR-021) is treated as a correctness
+  requirement, not an implementation detail. (Authoring the ViewDefinitions themselves is out
+  of scope for this feature.)
+- **No global transaction; isolated, re-runnable per type**: Persistence is **not** wrapped
+  in a single all-or-nothing transaction (FR-022). Each resource type persists independently
+  so one type's rejection cannot block the others, and a deferred type can be persisted in a
+  separate, idempotent later run (FR-023). Known driver: the test MeasureReports currently
+  fail the target Aidbox server's validation and may be persisted in a separate run after the
+  server's validation rules are relaxed (which may require a server restart).
 - **Version source**: Per the user's decision, the software version is **derived from
   git** at runtime (e.g., tag and/or short commit). A clearly-marked fallback is used
   when git metadata is unavailable.
@@ -306,24 +421,29 @@ are processed.
   if so, retaining them is straightforward; if ids are not stable/unique across files,
   an identity-mapping strategy is needed. **Investigation:** inspect `resource.id`
   values across several real input files for uniqueness/format before deciding.
-- **OQ-2 — Persistence granularity (whole bundle vs. contained resources)**: The user
-  may want to persist the **individual resources contained in each Bundle** (Patient,
-  Condition, Encounter, etc.) as first-class resources on the server, rather than
-  storing the Bundle as a single artifact. This is coupled to OQ-1 (each contained
-  resource needs a stable identity and resolvable references). The decision is deferred
-  until processing representative files reveals the necessary patterns. The current
-  scope decision ("persist all input bundles") fixes *which* inputs are in scope; this
-  question is about the *granularity* of what lands on the server.
+- **OQ-2 — Persistence granularity (whole bundle vs. contained resources)** — **RESOLVED
+  (2026-06-11, constitution v1.1.0):** Persist the **individual resources contained in each
+  collection Bundle** as first-class resources (FR-020), **not** the opaque Bundle.
+  Additionally, promote the eICR **Composition** from in-population eCR message Bundles to a
+  first-class resource (FR-021). The driver is the downstream SQL-on-FHIR analytics consumer,
+  which can flatten only first-class resources. **This supersedes the earlier MVP draft that
+  packed each collection Bundle into a single atomic `transaction` Bundle** — that approach
+  is replaced by independent, per-resource persistence with no global transaction (FR-022),
+  so a rejected resource type cannot roll back the others.
 
-> Note: These open questions do not block writing the spec, but they should be settled
-> in `/speckit-plan` (likely via a short data-inspection spike against real/`test`
-> input) before implementation locks in an identity and submission approach.
+> Note: OQ-1 and OQ-2 were settled in `/speckit-plan` (data-inspection spike + constitution
+> v1.1.0). See `research.md` D1 (identity), D2/D2b (granularity + Composition promotion), and
+> D10 (independent per-type persistence). No open questions remain blocking implementation.
 
 ## Dependencies
 
 - A reachable target FHIR R4 server with OAuth2 client-credentials authentication.
 - The canonical input fixtures under `test/input/` (and the input-shape definitions in
   `docs/CDS_TestData_DocumentationFor05252026zip.pdf`).
-- The project constitution (`.specify/memory/constitution.md`), whose principles
+- The project constitution (`.specify/memory/constitution.md`, **v1.1.0**), whose principles
   (zero-dependency runtime, profile conformance, defensive processing, config-over-
-  code, secret protection, clear output) constrain this feature.
+  code, secret protection, clear output, **Principle V independent persistence /
+  no global transaction, and Principle VI analytics-ready persistence granularity**)
+  constrain this feature.
+- The downstream **SQL-on-FHIR analytics workflow** (state DoH `ViewDefinition`s over the
+  target Aidbox server), whose requirement that resources be first-class drives FR-020/FR-021.

@@ -20,15 +20,18 @@ cp config.example.json config.json
 
 ## Scenario A — Dry run over the test fixtures (no server needed)
 
-Proves discovery, classification, stamping, and the collection→transaction transform.
+Proves discovery, classification, stamping, the per-resource PUT plan (independent, no
+transaction), and the eICR Composition promotion.
 
 ```bash
 python3 process.py --input-dir test/input --dry-run --verbose
 ```
 
 **Expected**: RunSummary lists every fixture file with its `kind`
-(`collection-bundle` / `measure-report` / `message-bundle`), the transform applied, and
-resource counts; `failed = 0`; exit `0`. No network calls.
+(`collection-bundle` / `measure-report` / `message-bundle`), the per-resource `PUT`s it
+would issue (one per contained resource — no `transaction` bundle), a promoted
+`PUT .../Composition/<id>` for each in-population message bundle, and resource counts;
+`failed = 0`; exit `0`. No network calls.
 
 ## Scenario B — Conformance gate (HL7 Reference Validator)
 
@@ -97,13 +100,46 @@ After Scenario C, run the three `_tag` queries in
 filter by `processed-by` returns only this processor's resources; filter by `processed-on`
 narrows to one run; filter by `source-file` traces resources to their origin file.
 
+## Scenario G — Independent per-type persistence: defer MeasureReports (constitution Principle V, D10)
+
+Proves failure isolation and the separate-run workflow for a resource type the server
+currently rejects (the test MeasureReports fail Aidbox validation).
+
+```bash
+# 1. Land everything EXCEPT MeasureReports (conformant resources persist independently):
+python3 process.py --input-dir test/input --config config.json --skip-types MeasureReport
+# 2. Relax the Aidbox MeasureReport validation profile (may require a server restart).
+# 3. Land just the MeasureReports in a separate run:
+python3 process.py --input-dir test/input --config config.json --only-types MeasureReport
+```
+
+**Expected**: Run 1 — all non-MeasureReport resources `succeeded`, MeasureReports `skipped`,
+exit `0`; one rejected resource never blocks its siblings. Run 2 — MeasureReports
+`succeeded`; the resources from run 1 are untouched (idempotent PUT-by-id; no duplicates, no
+rollback).
+
+## Scenario H — eICR Composition is first-class & queryable (constitution Principle VI, D2b)
+
+```bash
+python3 process.py --input-dir test/input --config config.json
+# The promoted Composition exists independently and is analytics-queryable:
+curl "$BASE/Composition/<eicr-composition-id>"
+curl "$BASE/Composition?_tag=https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/processed-by|ecr-fhir-processor"
+```
+
+**Expected**: the in-population eICR `Composition` is retrievable as its own resource (not
+only inside the stored message Bundle); the authoritative collection-Bundle clinical
+resources are unchanged by the promotion (no lower-fidelity overwrite).
+
 ## Validation → Success Criteria map
 
 | Scenario | Validates |
 |----------|-----------|
-| A | FR-001/003, transform correctness |
+| A | FR-001/003, per-resource transform + Composition-promotion plan |
 | B | Constitution III gate 1 (conformance) |
 | C | SC-001, FR-002/009, FR-017 (refs resolve) |
 | D | SC-008, FR-016 |
 | E | SC-006, FR-010/012/014 |
 | F | SC-002/003/004, FR-004/005, US2-5 |
+| G | Constitution Principle V — independent, isolated, re-runnable per-type persistence (D10) |
+| H | Constitution Principle VI — analytics-ready first-class Composition (D2b) |

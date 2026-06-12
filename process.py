@@ -99,6 +99,14 @@ class FileOutcome:
     resource_count: int
     status: str  # succeeded | failed | skipped
     detail: str = ""
+    resource_type: str | None = None  # FHIR type; derived from `action` for submissions
+
+    def __post_init__(self) -> None:
+        # Submission actions are "PUT <Type>/<id>"; file-level skip/error actions
+        # ("skip", "error") carry no resource type. Derive it once here so the run
+        # summary can stratify resource counts by type (FHIR ids never contain "/").
+        if self.resource_type is None and self.action.startswith("PUT "):
+            self.resource_type = self.action[len("PUT "):].split("/", 1)[0]
 
 
 @dataclass
@@ -977,8 +985,31 @@ def _report_summary(summary: RunSummary, dry_run: bool) -> None:
         logger.info("  %-9s %-16s %-28s n=%-3d %s",
                     o.status, o.kind, o.action, o.resource_count,
                     o.filename + (f" — {o.detail}" if o.detail else ""))
+    # Stratify resource outcomes by FHIR type (D8). `read` counts input *files*; the
+    # remaining totals count *resources* (one per independent PUT). Type-less outcomes
+    # (unreadable/unrecognized files) carry no resource_type and are omitted here.
+    by_type: dict[str, dict[str, int]] = {}
+    for o in summary.outcomes:
+        if o.resource_type is None:
+            continue
+        counts = by_type.setdefault(
+            o.resource_type, {"succeeded": 0, "failed": 0, "skipped": 0})
+        if o.status in counts:
+            counts[o.status] += 1
+
+    if by_type:
+        logger.info("-" * 60)
+        logger.info("resources by type:")
+        for rtype in sorted(by_type):
+            c = by_type[rtype]
+            submitted = c["succeeded"] + c["failed"]
+            logger.info(
+                "  %-18s submitted=%-3d succeeded=%-3d failed=%-3d skipped=%-3d",
+                rtype, submitted, c["succeeded"], c["failed"], c["skipped"])
+
     logger.info("-" * 60)
-    logger.info("read=%d submitted=%d succeeded=%d failed=%d skipped=%d",
+    logger.info("read=%d input-files | resources: submitted=%d succeeded=%d "
+                "failed=%d skipped=%d",
                 summary.read, summary.submitted, summary.succeeded,
                 summary.failed, summary.skipped)
     logger.info("exit_code=%d", summary.exit_code)

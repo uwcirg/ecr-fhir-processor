@@ -119,16 +119,27 @@ Every failing `OperationOutcome` is emitted by Aidbox's **FHIR Schema validation
   *referenced* resource against the required profile and rejects on mismatch. Note: the
   `Patient` PUTs successfully **standalone** (HTTP 200) — rejection occurs only when it is
   validated *as a reference target*. The HL7 validator gate does **not** flag this.
+- **Existence vs. conformance (important):** Aidbox "reference validation" covers two
+  distinct sub-checks — (1) *referential existence* (does `Patient/<id>` exist on the
+  server?) and (2) *target-profile conformance* (does the referenced resource's **content**
+  satisfy the `targetProfile` the referencing element declares?). **These failures are
+  entirely (2), not (1).** The message says the referenced resource's *content* "doesn't
+  conform" — Aidbox resolved the target (it exists) and judged its content against the
+  profile. The `reference` skip value disables reference validation *as a category*, so it
+  suppresses **both** sub-checks; the docs advertise (1), but it provably also covers (2).
 - **Aidbox workaround:** `aidbox-validation-skip: reference` request header on the PUT
   (must be enabled box-wide with `BOX_FHIR_VALIDATION_SKIP_REFERENCE=true`). This is the
   only **per-request** lever, so it can be applied surgically by the submitter without
   weakening the whole box. **The processor sends this header when configured** via
   `config.server.validation_skip` (a list, e.g. `["reference"]`; empty/absent = full
-  validation). **Caveat (unconfirmed):** the header is documented for skipping
-  *referential-existence* checks; whether it also suppresses target-profile *conformance*
-  checks (this exact error) was not confirmable from the docs and needs a one-shot empirical
-  run. Alternatives: `BOX_FHIR_VALIDATOR_STRICT_PROFILE_RESOLUTION=false` (default) means
-  *unknown* profiles are ignored — but here the profiles are loaded, so that doesn't help.
+  validation). **Confirmed effective (2026-06-12):** the docs only describe this header as
+  skipping *referential-existence* checks, but an empirical run with
+  `BOX_FHIR_VALIDATION_SKIP_REFERENCE=true` + `validation_skip: ["reference"]`
+  (`log/ecr-fhir-processor_2026-06-12t152045.fails.log`) cleared **all three** Cause-1
+  failures (Observation ×2 + MedicationRequest ×1; 39→42 succeeded). So the header **also
+  suppresses target-profile *conformance* checks**, not just existence.
+  (`BOX_FHIR_VALIDATOR_STRICT_PROFILE_RESOLUTION=false` (default) only ignores *unknown*
+  profiles — these profiles are loaded, so that lever does not help here.)
 
 ### Cause 2 — `mrp-2` constraint (base FHIR R4 invariant)
 
@@ -166,7 +177,7 @@ Every failing `OperationOutcome` is emitted by Aidbox's **FHIR Schema validation
 | Lever | Scope | Silences | Notes |
 | --- | --- | --- | --- |
 | `BOX_FHIR_SCHEMA_VALIDATION=false` | box-wide | **all 3** | Disables FHIR Schema engine; reverts to lighter structural validation. Removes profile validation entirely. Cleanest single switch to ingest source as-is. |
-| `BOX_FHIR_VALIDATION_SKIP_REFERENCE=true` + `aidbox-validation-skip` header | **per-request** | Cause 1 (likely) | Only per-PUT lever. Sent by the processor via `config.server.validation_skip` (e.g. `["reference"]`). Target-profile coverage unconfirmed — verify empirically. |
+| `BOX_FHIR_VALIDATION_SKIP_REFERENCE=true` + `aidbox-validation-skip` header | **per-request** | Cause 1 (**confirmed**) | Only per-PUT lever. Sent by the processor via `config.server.validation_skip` (e.g. `["reference"]`). Confirmed 2026-06-12 to also cover target-profile *conformance*, not just existence. |
 | `AIDBOX_TERMINOLOGY_SERVICE_BASE_URL` unset | box-wide | Cause 3 | No terminology server ⇒ binding validation skipped. |
 | `BOX_FHIR_VALIDATOR_STRICT_PROFILE_RESOLUTION` / `..._STRICT_EXTENSION_RESOLUTION` | box-wide | — | Default `false`: *unknown* profiles/extensions ignored. Does not help Causes 1–3 (profiles are loaded). |
 

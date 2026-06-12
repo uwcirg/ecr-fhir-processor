@@ -255,6 +255,15 @@ def validate_config(config: RunConfig, dry_run: bool) -> list[str]:
                 f"Config field server.{fieldname} is still the example placeholder "
                 f"'{value}'. Edit config.json with real values."
             )
+
+    skip = server.get("validation_skip")
+    if skip is not None and (
+        not isinstance(skip, list) or not all(isinstance(s, str) for s in skip)
+    ):
+        errors.append(
+            'Config field server.validation_skip must be a list of strings '
+            '(e.g. ["reference"]).'
+        )
     return errors
 
 
@@ -606,6 +615,17 @@ class FhirClient:
         self.server = server
         self.base = (server.get("base_url") or "").rstrip("/")
         self.token: str | None = None
+        # Optional Aidbox validation relaxation (config server.validation_skip, e.g.
+        # ["reference"]). When set, every submission carries the `aidbox-validation-skip`
+        # header so Aidbox bypasses the named validation pass(es). See
+        # known-validation-issues.md "Aidbox ingestion-time validation". Empty/absent =
+        # no header = full validation (default).
+        self.validation_skip: list[str] = list(server.get("validation_skip") or [])
+        if self.validation_skip:
+            logger.info(
+                "Aidbox validation relaxation active: aidbox-validation-skip: %s",
+                ",".join(self.validation_skip),
+            )
 
     def _fetch_token(self) -> str:
         data = urllib.parse.urlencode({
@@ -635,13 +655,15 @@ class FhirClient:
         self._ensure_token()
         encoded = json.dumps(body).encode("utf-8") if body is not None else None
         for attempt in range(2):
+            headers = {
+                "Authorization": f"Bearer {self.token}",
+                "Accept": "application/fhir+json",
+                "Content-Type": "application/fhir+json",
+            }
+            if self.validation_skip:
+                headers["aidbox-validation-skip"] = ",".join(self.validation_skip)
             req = urllib.request.Request(
-                url, data=encoded, method=method,
-                headers={
-                    "Authorization": f"Bearer {self.token}",
-                    "Accept": "application/fhir+json",
-                    "Content-Type": "application/fhir+json",
-                },
+                url, data=encoded, method=method, headers=headers,
             )
             try:
                 with urllib.request.urlopen(req) as resp:  # noqa: S310

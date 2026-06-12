@@ -1,13 +1,26 @@
 # Known Validation Issues
 
-Tracks HL7 FHIR Reference Validator errors that originate in **upstream IG
-dependencies** (not in this project's handling) and are therefore filtered by CI and by
-`scripts/validate.sh` so the build stays green while they remain unresolved upstream.
+Documents FHIR validation errors seen in this project's pipeline that originate in
+**upstream sources** (the test-data supplier's fixtures or upstream IG dependencies) —
+**not** in this project's handling. It covers two distinct validation surfaces:
 
-> **Filtering rule (constitution Principle III):** CI/validate filtering MUST match only
-> the *specific, documented* error patterns below — never broad wildcards. Any validator
-> error that does **not** match a documented entry here is a real failure and MUST fail
-> the build.
+1. **The HL7 FHIR Validator gate** — the HL7 FHIR Validator (`validator_cli.jar`), run by
+   `scripts/validate.sh` and CI. Errors documented for this surface are *filtered* so the
+   build stays green while they remain unresolved upstream. This is the bulk of the file.
+2. **Aidbox ingestion-time validation** — HTTP 422s returned when *submitting* resources to
+   an Aidbox server. Documented in its own section near the end as **reference only**:
+   nothing there is filtered, and it does not affect the build.
+
+> **Filtering rule (constitution Principle III):** the gate's filtering (surface 1) MUST
+> match only the *specific, documented* `PATTERN:` lines below — never broad wildcards. Any
+> HL7-validator error that does **not** match a documented entry here is a real failure and
+> MUST fail the build.
+
+> **A note on the word "reference":** "the validator" or "the HL7 FHIR Validator" always
+> means the `validator_cli.jar` gate tool (never a "reference implementation"). FHIR
+> *references* (the `Reference` data type / referential integrity, as in the Aidbox
+> `aidbox-validation-skip: reference` lever) are a separate, unrelated meaning, used only in
+> the Aidbox section.
 
 ## How to read this file
 
@@ -76,7 +89,7 @@ resolve to warnings, not errors, without it.
 ## Aidbox ingestion-time validation (separate from the HL7 validator gate)
 
 > **Scope note:** This section documents **Aidbox server** rejections seen when *submitting*
-> resources (HTTP 422 at PUT time) — a different mechanism from the HL7 Reference Validator
+> resources (HTTP 422 at PUT time) — a different mechanism from the HL7 FHIR Validator
 > gate documented above. **Do not add `PATTERN:` lines here:** those are consumed by
 > `scripts/validate.sh` to filter *HL7 validator* output, and these Aidbox messages never
 > appear there. This section is reference documentation only.
@@ -109,7 +122,9 @@ Every failing `OperationOutcome` is emitted by Aidbox's **FHIR Schema validation
 - **Aidbox workaround:** `aidbox-validation-skip: reference` request header on the PUT
   (must be enabled box-wide with `BOX_FHIR_VALIDATION_SKIP_REFERENCE=true`). This is the
   only **per-request** lever, so it can be applied surgically by the submitter without
-  weakening the whole box. **Caveat (unconfirmed):** the header is documented for skipping
+  weakening the whole box. **The processor sends this header when configured** via
+  `config.server.validation_skip` (a list, e.g. `["reference"]`; empty/absent = full
+  validation). **Caveat (unconfirmed):** the header is documented for skipping
   *referential-existence* checks; whether it also suppresses target-profile *conformance*
   checks (this exact error) was not confirmable from the docs and needs a one-shot empirical
   run. Alternatives: `BOX_FHIR_VALIDATOR_STRICT_PROFILE_RESOLUTION=false` (default) means
@@ -151,7 +166,7 @@ Every failing `OperationOutcome` is emitted by Aidbox's **FHIR Schema validation
 | Lever | Scope | Silences | Notes |
 | --- | --- | --- | --- |
 | `BOX_FHIR_SCHEMA_VALIDATION=false` | box-wide | **all 3** | Disables FHIR Schema engine; reverts to lighter structural validation. Removes profile validation entirely. Cleanest single switch to ingest source as-is. |
-| `BOX_FHIR_VALIDATION_SKIP_REFERENCE=true` + `aidbox-validation-skip: reference` header | **per-request** | Cause 1 (likely) | Only per-PUT lever. Target-profile coverage unconfirmed — verify empirically. |
+| `BOX_FHIR_VALIDATION_SKIP_REFERENCE=true` + `aidbox-validation-skip` header | **per-request** | Cause 1 (likely) | Only per-PUT lever. Sent by the processor via `config.server.validation_skip` (e.g. `["reference"]`). Target-profile coverage unconfirmed — verify empirically. |
 | `AIDBOX_TERMINOLOGY_SERVICE_BASE_URL` unset | box-wide | Cause 3 | No terminology server ⇒ binding validation skipped. |
 | `BOX_FHIR_VALIDATOR_STRICT_PROFILE_RESOLUTION` / `..._STRICT_EXTENSION_RESOLUTION` | box-wide | — | Default `false`: *unknown* profiles/extensions ignored. Does not help Causes 1–3 (profiles are loaded). |
 

@@ -44,6 +44,18 @@ class ConfigValidationTest(unittest.TestCase):
                         for k in process.REQUIRED_SERVER_FIELDS}
         self.assertEqual(process.validate_config(_config(placeholders), dry_run=True), [])
 
+    def test_validation_skip_absent_ok(self):
+        self.assertEqual(process.validate_config(_config(GOOD_SERVER), dry_run=False), [])
+
+    def test_validation_skip_list_ok(self):
+        server = dict(GOOD_SERVER, validation_skip=["reference"])
+        self.assertEqual(process.validate_config(_config(server), dry_run=False), [])
+
+    def test_validation_skip_wrong_type_rejected(self):
+        server = dict(GOOD_SERVER, validation_skip="reference")  # string, not list
+        errors = process.validate_config(_config(server), dry_run=False)
+        self.assertTrue(any("validation_skip" in e for e in errors))
+
 
 if __name__ == "__main__":
     unittest.main()

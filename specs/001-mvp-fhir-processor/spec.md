@@ -1,6 +1,6 @@
 # Feature Specification: MVP eCR FHIR Processor
 
-**Feature Branch**: `add-constitution`
+**Feature Branch**: `indi-resources` (feature dir `specs/001-mvp-fhir-processor`; earlier work on `add-constitution` / `mvp-impl`)
 
 **Created**: 2026-06-09
 

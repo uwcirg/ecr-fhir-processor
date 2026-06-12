@@ -1,6 +1,6 @@
 # Implementation Plan: MVP eCR FHIR Processor
 
-**Branch**: `add-constitution` | **Date**: 2026-06-11 (amended for constitution v1.1.0) | **Spec**: [spec.md](./spec.md)
+**Branch**: `indi-resources` (feature dir `specs/001-mvp-fhir-processor`) | **Date**: 2026-06-11 (amended for constitution v1.1.0) | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `specs/001-mvp-fhir-processor/spec.md`; constitution
 `.specify/memory/constitution.md` **v1.1.0** (Principles VI + amended V).

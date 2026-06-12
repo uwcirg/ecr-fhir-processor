@@ -1,7 +1,14 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.0.0 → 1.1.0
+Version change: 1.1.0 → 1.1.1 (latest)
+Rationale (1.1.1, PATCH): Clarifying note only — Principle II now records that the APHL
+chronic-ds IG (cqf.aphl.chronic-ds#0.0.002) is an unpublished draft not resolvable from
+packages.fhir.org and is intentionally excluded from the validator -ig set (its Measure
+canonicals resolve to warnings, not errors). No principle added, removed, or redefined;
+intent unchanged. Authoritative rationale lives in known-validation-issues.md.
+
+----- Prior amendment (1.0.0 → 1.1.0) -----
 Rationale: MINOR amendment. Adds one new principle and materially expands one
 existing principle to accommodate a downstream SQL-on-FHIR analytics workflow that
 requires contained resources to be stored as independent, first-class resources and
@@ -102,6 +109,12 @@ version changes without ad-hoc code edits.
   at version `0.0.002` (e.g.
   `…/Measure/DiabetesHemoglobinA1cHbA1cPoorControl9FHIR|0.0.002`,
   `…/Measure/ControllingHighBloodPressureFHIR|0.0.002`).
+  **Note (validator set):** `cqf.aphl.chronic-ds#0.0.002` is an unpublished draft available
+  only as a `build.fhir.org` CI tarball — it is **not** resolvable from `packages.fhir.org`,
+  and the test-data supplier does not validate against it. It is therefore **intentionally
+  excluded** from the validator `-ig` set; the fixtures' `…|0.0.002` Measure canonicals
+  resolve to **warnings, not errors** without it (acceptable per this principle). See
+  `known-validation-issues.md` → "Pinned IG set" for the authoritative rationale.
 
 **Rules:**
 
@@ -448,4 +461,4 @@ reasoning in the relevant spec or PR — do not silently deviate.
 - When a principle conflicts with a practical constraint, document the exception and
   the reasoning in the relevant spec or PR.
 
-**Version**: 1.1.0 | **Ratified**: 2026-06-09 | **Last Amended**: 2026-06-11
+**Version**: 1.1.1 | **Ratified**: 2026-06-09 | **Last Amended**: 2026-06-12

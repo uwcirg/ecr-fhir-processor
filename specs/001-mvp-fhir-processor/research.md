@@ -306,10 +306,12 @@ Proposed `config.example.json` shape (final wording in implementation):
     "client_secret": "YOUR_CLIENT_SECRET"
   },
   "ig_versions": {
-    "hl7.fhir.us.ecr": "TODO_PIN",
-    "hl7.fhir.us.core": "TODO_PIN",
-    "hl7.fhir.us.davinci-deqm": "TODO_PIN",
-    "aphl.chronic-ds": "0.0.002"
+    "hl7.fhir.us.core": "6.1.0",
+    "hl7.fhir.us.qicore": "4.1.1",
+    "hl7.fhir.us.cqfmeasures": "3.0.0",
+    "hl7.fhir.us.davinci-deqm": "5.0.0",
+    "hl7.fhir.us.ecr": "2.1.2",
+    "hl7.fhir.us.ph-library": "2.0.0"
   },
   "paths": {
     "input_dir": "input",
@@ -322,8 +324,19 @@ Proposed `config.example.json` shape (final wording in implementation):
 **Rationale**: Config-over-code (constitution). IG versions as named config values
 (Principle II "IG Version Tracking"). `paths` makes input/output/log locations
 configurable while defaulting to the root dirs; a CLI flag may override `input_dir` for
-ad-hoc runs. The `aphl.chronic-ds` Measure canonicals are pinned at `0.0.002` per the
-fixtures; the others carry `TODO_PIN` per the constitution's deferred-TODO note.
+ad-hoc runs.
+
+> **Update (2026-06-12 — supersedes the earlier `TODO_PIN` draft above):** the IG set was
+> pinned to exactly what the test-data supplier validates against, all resolvable from
+> `packages.fhir.org`: `hl7.fhir.us.core#6.1.0`, `hl7.fhir.us.qicore#4.1.1`,
+> `hl7.fhir.us.cqfmeasures#3.0.0`, `hl7.fhir.us.davinci-deqm#5.0.0`, `hl7.fhir.us.ecr#2.1.2`,
+> `hl7.fhir.us.ph-library#2.0.0` (validator v6.9.9, Java 17, FHIR R4). The **APHL chronic-ds
+> IG is intentionally NOT pinned**: `cqf.aphl.chronic-ds#0.0.002` is an unpublished draft
+> available only as a `build.fhir.org` CI tarball (not resolvable from `packages.fhir.org`),
+> the supplier itself does not validate against it, and the fixtures'
+> `…/Measure/…|0.0.002` canonical references resolve to **warnings, not errors** without it
+> (acceptable under Principle II). See `known-validation-issues.md` → "Pinned IG set" for the
+> authoritative rationale and the delta-vs-baseline gate that absorbs those warnings.
 
 **Alternatives considered**: hard-coding IG versions in `process.py` — rejected by
 Principle II (must be config/constants, not buried); the script will read them from

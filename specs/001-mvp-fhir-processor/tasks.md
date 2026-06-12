@@ -122,7 +122,7 @@ success/failure with the correct exit status.
 
 > Write/refresh these FIRST and confirm they FAIL before implementing.
 
-- [ ] T012 [P] [US1] **Rewrite** `tests/test_transform.py` for the **independent per-resource
+- [X] T012 [P] [US1] **Rewrite** `tests/test_transform.py` for the **independent per-resource
   PUT plan** (replacing the old transaction assertions): a `collection` Bundle yields one
   planned `PUT <Type>/<retained-id>` per contained `entry.resource`, retains original
   `resource.id` (D1), and produces **no** `transaction` Bundle (FR-020, FR-022, D2,
@@ -137,12 +137,12 @@ success/failure with the correct exit status.
   `server.token_endpoint`, cache bearer token in memory, send `Authorization: Bearer` +
   `Accept: application/fhir+json` on FHIR calls, refresh once on 401 (FR-009, D6,
   fhir-submission contract). Uses `urllib` only.
-- [ ] T015 [US1] **Replace** `transform_collection_to_transaction` in `process.py` with a
+- [X] T015 [US1] **Replace** `transform_collection_to_transaction` in `process.py` with a
   **per-resource PUT planner**: iterate the `collection` Bundle's `entry[].resource`, retain
   each original `resource.id` (D1), and emit one independent `PUT [base]/<Type>/<id>` unit of
   work per resource — **never** a `transaction` Bundle (FR-020, FR-022, D2, data-model
   transforms).
-- [ ] T016 [US1] **Replace** `submit_transaction` / per-kind submission in `process.py` with
+- [X] T016 [US1] **Replace** `submit_transaction` / per-kind submission in `process.py` with
   **independent per-resource `PUT`s**: each contained resource → `PUT [base]/<Type>/<id>` as
   its own request/outcome; standalone MeasureReport → `PUT [base]/MeasureReport/<id>`; eCR
   message Bundle → `PUT [base]/Bundle/<id>`. A non-atomic `batch` Bundle MAY be used as a
@@ -157,12 +157,12 @@ success/failure with the correct exit status.
 - [X] T018 [US1] Implement reference handling in `process.py`: do NOT rewrite references;
   log WARNING on absolute references to a non-target host; relative refs left intact so
   they resolve via retained ids (FR-017, D3).
-- [ ] T019 [US1] **Rework** submission-outcome wiring in `process.py` for **per-resource
+- [X] T019 [US1] **Rework** submission-outcome wiring in `process.py` for **per-resource
   isolation**: a non-2xx on any resource's `PUT` → log ERROR including the server
   `OperationOutcome`, count that **resource** `failed` (never `succeeded`), and **continue
   with the siblings** — no transaction whose rejection rolls back or blocks the rest
   (FR-012, FR-022, D8, fhir-submission SUB-3). With a `batch`, read outcomes per entry.
-- [ ] T020 [US1] **Update** `--dry-run` and the output mirror in `process.py` to the new plan:
+- [X] T020 [US1] **Update** `--dry-run` and the output mirror in `process.py` to the new plan:
   dry-run runs all transforms but performs no token request/submission and logs the would-be
   **per-resource PUTs** (one line per resource, plus the promoted Composition PUT from US4);
   otherwise optionally mirror submitted JSON (pretty-printed) to
@@ -206,7 +206,7 @@ a `source-file` `_tag` traces resources to their origin file.
   `process.py`: add the three `meta.tag[]` entries + `meta.source`; additive and idempotent
   (replace own tags by `system`, never append duplicates); never alter clinical content
   (FR-004/005/015, D4, provenance contract).
-- [ ] T026 [US2] **Re-point** stamping into the new pipeline in `process.py`: stamp **each
+- [X] T026 [US2] **Re-point** stamping into the new pipeline in `process.py`: stamp **each
   contained resource** (per-resource PUT, US1 T015/T016), the standalone MeasureReport, the
   message Bundle's own `meta`, **and the promoted eICR Composition** (US4 T029) — before
   submission (FR-004; integrates with US1 + US4). Replaces the old "stamp each transaction
@@ -233,27 +233,27 @@ run adds them with no duplicates (quickstart Scenarios G & H).
 
 > Write these FIRST and confirm they FAIL before implementing.
 
-- [ ] T027 [P] [US4] Unit test for **eICR Composition promotion** in
+- [X] T027 [P] [US4] Unit test for **eICR Composition promotion** in
   `tests/test_promotion.py`: from a message Bundle, extract the `Composition` nested in the
   `entry(content Bundle, type=document)`, plan `PUT [base]/Composition/<per-case GUID id>`,
   and assert **only** the Composition is promoted (no other nested clinical resources); a
   Composition reference that does not resolve to a persisted resource is WARNING-logged, not
   mutated (FR-021, D2b, D3, fhir-submission AC-5).
-- [ ] T028 [P] [US4] Unit test for **TypeFilter selection** in `tests/test_typefilter.py`:
+- [X] T028 [P] [US4] Unit test for **TypeFilter selection** in `tests/test_typefilter.py`:
   `--only-types` keeps only the listed FHIR resourceTypes; `--skip-types` excludes them;
   excluded resources are counted `skipped` (not `failed`); the `measure-report` kind alias is
   accepted; `--only-types`/`--skip-types` are mutually exclusive (FR-023, D10, cli contract).
 
 ### Implementation for User Story 4
 
-- [ ] T029 [US4] Implement **eICR Composition promotion** in `process.py` (FR-021, D2b):
+- [X] T029 [US4] Implement **eICR Composition promotion** in `process.py` (FR-021, D2b):
   when processing a message Bundle, locate the nested `type=document` content Bundle, extract
   its `Composition`, stamp it (US2), and `PUT [base]/Composition/<id>` as an independent
   first-class resource **in addition to** persisting the message Bundle whole. Promote **only**
   the Composition — never re-persist the eICR's other lower-fidelity nested clinical copies
   over the authoritative collection-Bundle resources; the `MessageHeader` stays nested. WARN
   on any unresolved Composition reference (D3); do not mutate it.
-- [ ] T030 [US4] Implement the **TypeFilter** + CLI flags in `process.py` (FR-023, D10):
+- [X] T030 [US4] Implement the **TypeFilter** + CLI flags in `process.py` (FR-023, D10):
   add `--only-types` / `--skip-types` (comma-separated FHIR resourceTypes; accept the
   `measure-report` kind alias; mutually exclusive) to the parser (extends T008); gate which
   resourceTypes are PUT this run; resources excluded by the filter are counted `skipped`
@@ -266,6 +266,16 @@ run adds them with no duplicates (quickstart Scenarios G & H).
   type idempotently (no duplicates, no rollback), with collection-Bundle resources unchanged
   by the Composition promotion. Record results (and any external-server blocker) in the run
   notes.
+  > **BLOCKED (external server).** The retrieval-from-server assertions need a reachable
+  > test FHIR/Aidbox server, which is not available in this environment. The deterministic
+  > precursors are verified locally: the dry-run plans one independent `PUT [Type]/<id>` per
+  > contained resource **plus** a promoted `PUT /Composition/<id>` for each in-population
+  > message bundle (50 PUTs over 13 files, `failed=0`, exit `0`); `--skip-types MeasureReport`
+  > counts the 5 MeasureReports `skipped` while persisting the other 45; `--only-types
+  > MeasureReport` inverts that (5 submitted / 45 skipped); and the conformance delta gate
+  > over the would-be submissions introduces **zero** new validator errors vs. the source
+  > baseline. The live GET-by-id / resource-count checks remain to be run once a server is
+  > reachable.
 
 **Checkpoint**: US1 + US2 + US4 work — contained resources and the eICR Composition are
 first-class & queryable, and types persist independently with isolated failures.
@@ -305,11 +315,11 @@ placeholders, fails fast with a message naming the field and a non-zero exit.
 
 **Purpose**: Documentation, CI, and the constitution's dual-gate validation.
 
-- [ ] T035 [P] **Update** `README.md` at repo root for the v1.1.0 model: independent
+- [X] T035 [P] **Update** `README.md` at repo root for the v1.1.0 model: independent
   per-resource persistence (no transaction), the promoted eICR Composition, and the new
   `--only-types`/`--skip-types` per-type-run workflow, alongside the existing CLI/setup/
   provenance recipes (constitution: README as Living Documentation).
-- [ ] T036 [P] **Update** CI workflow `.github/workflows/ci.yml` to run the new/rewritten
+- [X] T036 [P] **Update** CI workflow `.github/workflows/ci.yml` to run the new/rewritten
   tests (`test_promotion.py`, `test_typefilter.py`, rewritten `test_transform.py`) via
   `python3 -m unittest`, keep lint (ruff), the dry-run over `test/input`, and the secret scan
   (constitution: CI Pipeline; Dual-Gate prep).
@@ -327,7 +337,7 @@ placeholders, fails fast with a message naming the field and a non-zero exit.
   change. (Artifact present; mechanism in `validate.sh` `--update-baseline`.)
 - [X] T038 [P] `tests/test_discovery.py` exercising input discovery & classification over
   `test/input/` (foundational coverage for T010).
-- [ ] T039 **Re-run** quickstart Scenario A (`python3 process.py --input-dir test/input
+- [X] T039 **Re-run** quickstart Scenario A (`python3 process.py --input-dir test/input
   --dry-run --verbose`) after the Phase 3/5 migration and confirm every fixture is classified,
   the dry-run prints **per-resource PUTs** (not a transaction) plus a promoted
   `PUT .../Composition/<id>` for each in-population message bundle, `failed = 0`, exit `0`.
@@ -337,7 +347,7 @@ placeholders, fails fast with a message naming the field and a non-zero exit.
 - [X] T041 Pin the `ig_versions` in `config.example.json` to confirmed versions
   (`hl7.fhir.us.core` 6.1.0, `hl7.fhir.us.ecr` 2.1.2, `davinci-deqm` 5.0.0, etc.); BLOCKS a
   green conformance gate (T037) — Principle II IG Version Tracking.
-- [ ] T042 [US4-adjacent] Extend `tests/test_rerun.py` for the v1.1.0 model: assert
+- [X] T042 [US4-adjacent] Extend `tests/test_rerun.py` for the v1.1.0 model: assert
   per-resource PUT targets are identical across two runs, provenance tags do not accumulate,
   and (deferred type) a `--only-types`/`--skip-types` split leaves already-persisted resources
   untouched (FR-016/022/023, SC-008/SC-011). The full live-server resource-count assertion

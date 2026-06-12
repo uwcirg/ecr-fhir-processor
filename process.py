@@ -54,6 +54,9 @@ KIND_MEASURE_REPORT = "measure-report"
 KIND_MESSAGE = "message-bundle"
 KIND_UNKNOWN = "unknown"
 
+#: Kind aliases accepted by --only-types/--skip-types alongside FHIR resourceTypes (D10).
+KIND_TYPE_ALIASES = {"measure-report": "MeasureReport"}
+
 logger = logging.getLogger("ecr-fhir-processor")
 
 
@@ -181,6 +184,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--measure", default=None,
                    help="Restrict to one measure folder "
                         "(poor-diabetic-control, controllable-bp, depression-screening).")
+    p.add_argument("--only-types", default=None,
+                   help="Comma-separated FHIR resourceTypes to persist EXCLUSIVELY this "
+                        "run (accepts the 'measure-report' kind alias). Mutually "
+                        "exclusive with --skip-types (D10).")
+    p.add_argument("--skip-types", default=None,
+                   help="Comma-separated FHIR resourceTypes to EXCLUDE this run "
+                        "(excluded resources counted 'skipped'). Accepts the "
+                        "'measure-report' kind alias (D10).")
     p.add_argument("--output-dir", default=None,
                    help="Where the submitted-JSON mirror is written "
                         "(default: config.paths.output_dir).")
@@ -316,20 +327,37 @@ def stamp_resource(resource: dict, version: str, timestamp: str, source_filename
 
 
 # --------------------------------------------------------------------------- #
-# Transforms (T015 — US1; data-model transforms, fhir-submission contract)
+# Transforms (T015, T029 — US1/US4; data-model transforms, fhir-submission contract)
 # --------------------------------------------------------------------------- #
 
 
-def transform_collection_to_transaction(bundle: dict) -> dict:
-    """Convert a ``collection`` Bundle to a ``transaction`` Bundle of PUT entries (D2).
+@dataclass
+class PutUnit:
+    """One independent per-resource ``PUT`` unit of work (D2, Principle V).
 
-    Each entry gets ``request = {method: "PUT", url: "<ResourceType>/<id>"}`` and the
-    original ``resource.id`` is retained (D1). Returns a new Bundle dict; entry
-    resources are shared by reference so upstream stamping is reflected.
+    Each contained resource is its own request and its own outcome — there is no
+    atomic ``transaction`` Bundle binding them together (FR-020, FR-022).
     """
-    out = dict(bundle)
-    out["type"] = "transaction"
-    new_entries = []
+
+    resource_type: str
+    resource_id: str
+    resource: dict
+
+    @property
+    def url(self) -> str:
+        return f"{self.resource_type}/{self.resource_id}"
+
+
+def plan_collection_puts(bundle: dict) -> list[PutUnit]:
+    """Plan one independent ``PUT [base]/<Type>/<id>`` per contained resource (D2).
+
+    Iterates the ``collection`` Bundle's ``entry[].resource``, retains each original
+    ``resource.id`` (D1), and returns one :class:`PutUnit` per resource — **never** an
+    atomic ``transaction`` Bundle (FR-020, FR-022). The PutUnit holds the resource by
+    reference so upstream stamping is reflected. Raises ``ValueError`` on a resource
+    missing ``resourceType``/``id`` (cannot build a PUT url).
+    """
+    units: list[PutUnit] = []
     for entry in bundle.get("entry", []) or []:
         resource = entry.get("resource", {})
         rtype = resource.get("resourceType")
@@ -339,13 +367,91 @@ def transform_collection_to_transaction(bundle: dict) -> dict:
                 f"Collection entry missing resourceType/id (cannot build PUT url): "
                 f"{rtype}/{rid}"
             )
-        new_entry = {"resource": resource,
-                     "request": {"method": "PUT", "url": f"{rtype}/{rid}"}}
-        if "fullUrl" in entry:
-            new_entry["fullUrl"] = entry["fullUrl"]
-        new_entries.append(new_entry)
-    out["entry"] = new_entries
-    return out
+        units.append(PutUnit(rtype, rid, resource))
+    return units
+
+
+def extract_eicr_composition(message_bundle: dict) -> dict | None:
+    """Extract the eICR ``Composition`` nested in the message Bundle's document Bundle.
+
+    Locates ``entry(content Bundle, type=document)`` and returns its first
+    ``Composition`` resource (a per-case GUID id — collision-safe for PUT, unlike the
+    document Bundle's fixed template-handle id, D4b). Returns ``None`` if absent (D2b).
+    Promotes **only** the Composition — the eICR's other nested clinical copies are
+    lower-fidelity duplicates and are NOT re-persisted (Principle V/VI).
+    """
+    for entry in message_bundle.get("entry", []) or []:
+        resource = entry.get("resource", {})
+        if resource.get("resourceType") == "Bundle" and resource.get("type") == "document":
+            for nested in resource.get("entry", []) or []:
+                candidate = nested.get("resource", {})
+                if candidate.get("resourceType") == "Composition":
+                    return candidate
+    return None
+
+
+def document_resource_keys(message_bundle: dict) -> set[str]:
+    """Collect ``Type/id`` keys of the resources inside the message's document Bundle.
+
+    These are the resources the promoted Composition's references resolve against — they
+    are persisted (under identical retained GUIDs) via the authoritative collection
+    Bundle (D2b).
+    """
+    keys: set[str] = set()
+    for entry in message_bundle.get("entry", []) or []:
+        resource = entry.get("resource", {})
+        if resource.get("resourceType") == "Bundle" and resource.get("type") == "document":
+            for nested in resource.get("entry", []) or []:
+                nres = nested.get("resource", {})
+                rtype, rid = nres.get("resourceType"), nres.get("id")
+                if rtype and rid:
+                    keys.add(f"{rtype}/{rid}")
+    return keys
+
+
+# --------------------------------------------------------------------------- #
+# Type filter (T030 — US4; D10, cli contract / data-model TypeFilter)
+# --------------------------------------------------------------------------- #
+
+
+@dataclass
+class TypeFilter:
+    """Selects which FHIR resourceTypes are persisted this run (D10, Principle V).
+
+    ``only`` (from ``--only-types``) persists ONLY the listed types; ``skip`` (from
+    ``--skip-types``) persists everything EXCEPT them. The two are mutually exclusive;
+    neither set means persist all. Excluded resources are counted ``skipped`` (D8).
+    """
+
+    only: frozenset | None = None
+    skip: frozenset | None = None
+
+    def allows(self, resource_type: str) -> bool:
+        if self.only is not None:
+            return resource_type in self.only
+        if self.skip is not None:
+            return resource_type not in self.skip
+        return True
+
+
+def _normalize_types(raw: str) -> frozenset:
+    """Parse a comma-separated type list, mapping kind aliases to resourceTypes (D10)."""
+    types = set()
+    for token in raw.split(","):
+        token = token.strip()
+        if token:
+            types.add(KIND_TYPE_ALIASES.get(token.lower(), token))
+    return frozenset(types)
+
+
+def build_type_filter(only_types: str | None, skip_types: str | None) -> TypeFilter:
+    """Build a :class:`TypeFilter` from the CLI flags; the two are mutually exclusive."""
+    if only_types and skip_types:
+        raise ValueError("--only-types and --skip-types are mutually exclusive (D10).")
+    return TypeFilter(
+        only=_normalize_types(only_types) if only_types else None,
+        skip=_normalize_types(skip_types) if skip_types else None,
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -392,24 +498,15 @@ class CollisionTracker:
 # --------------------------------------------------------------------------- #
 
 
-def warn_on_absolute_references(resource: dict, base_url: str) -> None:
-    """Log a WARNING for absolute references pointing at a non-target host (D3).
-
-    References are never rewritten; relative refs are left intact so they resolve via
-    retained ids. Walks the resource recursively for ``reference`` string fields.
-    """
-    base = (base_url or "").rstrip("/")
+def collect_references(resource: dict) -> list[str]:
+    """Return every ``reference`` string found anywhere in ``resource`` (recursive)."""
+    refs: list[str] = []
 
     def walk(node: object) -> None:
         if isinstance(node, dict):
             for key, value in node.items():
                 if key == "reference" and isinstance(value, str):
-                    if value.startswith(("http://", "https://")):
-                        if not base or not value.startswith(base):
-                            logger.warning(
-                                "Absolute reference to a non-target host will not "
-                                "resolve internally (left as-is, D3): %s", value
-                            )
+                    refs.append(value)
                 else:
                     walk(value)
         elif isinstance(node, list):
@@ -417,6 +514,44 @@ def warn_on_absolute_references(resource: dict, base_url: str) -> None:
                 walk(item)
 
     walk(resource)
+    return refs
+
+
+def warn_on_absolute_references(resource: dict, base_url: str) -> None:
+    """Log a WARNING for absolute references pointing at a non-target host (D3).
+
+    References are never rewritten; relative refs are left intact so they resolve via
+    retained ids. Walks the resource recursively for ``reference`` string fields.
+    """
+    base = (base_url or "").rstrip("/")
+    for value in collect_references(resource):
+        if value.startswith(("http://", "https://")):
+            if not base or not value.startswith(base):
+                logger.warning(
+                    "Absolute reference to a non-target host will not "
+                    "resolve internally (left as-is, D3): %s", value
+                )
+
+
+def warn_unresolved_composition_refs(composition: dict, resolvable: set) -> list[str]:
+    """WARN for each promoted-Composition reference that won't resolve (D2b, D3).
+
+    Checks only relative ``Type/id`` references against ``resolvable`` (the set of
+    ``Type/id`` keys persisted for this case). Absolute/``urn:`` references are handled
+    by :func:`warn_on_absolute_references` and are not re-checked here. References are
+    **never** mutated. Returns the list of unresolved relative references.
+    """
+    unresolved: list[str] = []
+    for ref in collect_references(composition):
+        if ref.startswith(("http://", "https://", "urn:")) or "/" not in ref:
+            continue
+        if ref not in resolvable:
+            unresolved.append(ref)
+            logger.warning(
+                "Promoted Composition reference does not resolve to a persisted "
+                "resource (left as-is, D2b/D3): %s", ref
+            )
+    return unresolved
 
 
 # --------------------------------------------------------------------------- #
@@ -528,10 +663,8 @@ class FhirClient:
                 raise SubmissionError(0, f"Network error reaching {url}: {exc.reason}") from exc
         raise SubmissionError(401, "Authentication failed after token refresh.")
 
-    def submit_transaction(self, bundle: dict) -> tuple[int, dict]:
-        return self.request("POST", self.base, body=bundle)
-
     def submit_put(self, resource_type: str, resource_id: str, resource: dict) -> tuple[int, dict]:
+        """Persist a single resource via update-in-place ``PUT`` by id (D2, SUB-1)."""
         return self.request("PUT", f"{self.base}/{resource_type}/{resource_id}", body=resource)
 
 
@@ -559,7 +692,13 @@ def mirror_output(output_dir: str, measure: str | None, run_date: str,
 
 @dataclass
 class Pipeline:
-    """Run-scoped processing context (one per execution)."""
+    """Run-scoped processing context (one per execution).
+
+    Persists each contained resource as its **own** ``PUT`` (no atomic transaction —
+    D2/Principle V): failures isolate per resource and resource types persist
+    independently. ``process()`` returns one :class:`FileOutcome` per unit of work
+    (per-resource PUT, standalone PUT, message-Bundle PUT, and promoted-Composition PUT).
+    """
 
     config: RunConfig
     version: str
@@ -569,24 +708,71 @@ class Pipeline:
     output_dir: str
     write_mirror: bool
     client: FhirClient | None
+    type_filter: TypeFilter = field(default_factory=TypeFilter)
     collisions: CollisionTracker = field(default_factory=CollisionTracker)
 
-    def _stamp_and_check(self, resource: dict, source_filename: str) -> None:
-        """Stamp a top-level resource and register it with the collision tracker."""
+    # -- shared helpers ------------------------------------------------------ #
+
+    def _stamp(self, resource: dict, source_filename: str) -> None:
+        """Stamp a resource and WARN on absolute non-target references (US2 T026, D3)."""
         stamp_resource(resource, self.version, self.timestamp, source_filename)
-        rtype = resource.get("resourceType")
-        rid = resource.get("id")
-        if rtype and rid:
-            status = self.collisions.check(rtype, rid, resource)
-            if status == "duplicate":
-                logger.info("Dedup: %s/%s already persisted with identical content.",
-                            rtype, rid)
         if self.client is not None:
             warn_on_absolute_references(resource, self.client.base)
 
+    def _put(self, kind: str, resource_type: str, resource_id: str, resource: dict,
+             source_filename: str) -> FileOutcome:
+        """Persist one resource as its own ``PUT`` and return its isolated outcome.
+
+        Applies the type filter (counted ``skipped``, D10), honours ``--dry-run`` (logs
+        the would-be PUT, no submission, SUB-5), and isolates a non-2xx / network failure
+        to this resource (counted ``failed``, never blocks siblings — SUB-3, D8).
+        """
+        action = f"PUT {resource_type}/{resource_id}"
+        if not self.type_filter.allows(resource_type):
+            logger.info("Skipping %s — excluded by --only-types/--skip-types (%s).",
+                        action, source_filename)
+            return FileOutcome(source_filename, kind, action, 1, "skipped",
+                               "excluded by type filter (D10)")
+        if self.dry_run:
+            logger.info("[dry-run] would %s (%s).", action, source_filename)
+            return FileOutcome(source_filename, kind, action, 1, "succeeded", "dry-run")
+        try:
+            status, response = self.client.submit_put(resource_type, resource_id, resource)
+        except SubmissionError as exc:
+            logger.error("Submission error for %s (%s): %s", action, source_filename, exc)
+            return FileOutcome(source_filename, kind, action, 1, "failed", str(exc))
+        if 200 <= status < 300:
+            return FileOutcome(source_filename, kind, action, 1, "succeeded", f"HTTP {status}")
+        logger.error("Submission rejected for %s (%s) HTTP %d: %s", action,
+                     source_filename, status, json.dumps(response))
+        return FileOutcome(source_filename, kind, action, 1, "failed",
+                           f"HTTP {status}: {json.dumps(response)}")
+
+    def _guarded_put(self, kind: str, resource_type: str, resource_id: str,
+                     resource: dict, source_filename: str) -> FileOutcome:
+        """Collision-check then PUT a single top-level resource; isolate either failure."""
+        try:
+            status = self.collisions.check(resource_type, resource_id, resource)
+        except CollisionError as exc:
+            logger.error("Collision for %s/%s (%s): %s", resource_type, resource_id,
+                         source_filename, exc)
+            return FileOutcome(source_filename, kind, f"PUT {resource_type}/{resource_id}",
+                               1, "failed", str(exc))
+        if status == "duplicate":
+            logger.info("Dedup: %s/%s already persisted with identical content.",
+                        resource_type, resource_id)
+        return self._put(kind, resource_type, resource_id, resource, source_filename)
+
+    def _maybe_mirror(self, measure: str | None, source_filename: str,
+                      payload: dict) -> None:
+        if self.write_mirror:
+            mirror_output(self.output_dir, measure, self.run_date, source_filename, payload)
+
+    # -- entry point --------------------------------------------------------- #
+
     def process(self, data: dict, kind: str, source_filename: str,
-                measure: str | None) -> FileOutcome:
-        """Stamp, transform, and submit one parsed input by kind."""
+                measure: str | None) -> list[FileOutcome]:
+        """Stamp, plan, and submit one parsed input by kind; return per-unit outcomes."""
         if kind == KIND_COLLECTION:
             return self._process_collection(data, source_filename, measure)
         if kind == KIND_MEASURE_REPORT:
@@ -596,81 +782,48 @@ class Pipeline:
         raise ValueError(f"Unsupported kind: {kind}")
 
     def _process_collection(self, bundle: dict, source_filename: str,
-                            measure: str | None) -> FileOutcome:
-        entries = bundle.get("entry", []) or []
-        for entry in entries:
-            resource = entry.get("resource")
-            if resource is not None:
-                self._stamp_and_check(resource, source_filename)
-        txn = transform_collection_to_transaction(bundle)
-        count = len(txn.get("entry", []))
-        self._maybe_mirror(measure, source_filename, txn)
-        if self.dry_run:
-            logger.info("[dry-run] would POST transaction of %d PUT entries (%s).",
-                        count, source_filename)
-            return FileOutcome(source_filename, KIND_COLLECTION, "POST-transaction",
-                               count, "succeeded", "dry-run")
-        status, response = self.client.submit_transaction(txn)
-        return self._txn_outcome(source_filename, count, status, response)
+                            measure: str | None) -> list[FileOutcome]:
+        # Plan one independent PUT per contained resource — NO transaction (D2, FR-022).
+        units = plan_collection_puts(bundle)
+        for unit in units:
+            self._stamp(unit.resource, source_filename)
+        # Mirror the stamped bundle (the submitted-resource content) for inspection (D9).
+        self._maybe_mirror(measure, source_filename, bundle)
+        return [self._guarded_put(KIND_COLLECTION, unit.resource_type, unit.resource_id,
+                                  unit.resource, source_filename) for unit in units]
 
     def _process_measure_report(self, report: dict, source_filename: str,
-                                measure: str | None) -> FileOutcome:
-        self._stamp_and_check(report, source_filename)
-        rid = report.get("id")
+                                measure: str | None) -> list[FileOutcome]:
+        self._stamp(report, source_filename)
         self._maybe_mirror(measure, source_filename, report)
-        if self.dry_run:
-            logger.info("[dry-run] would PUT MeasureReport/%s (%s).", rid, source_filename)
-            return FileOutcome(source_filename, KIND_MEASURE_REPORT,
-                               f"PUT MeasureReport/{rid}", 1, "succeeded", "dry-run")
-        status, response = self.client.submit_put("MeasureReport", rid, report)
-        return self._put_outcome(source_filename, KIND_MEASURE_REPORT,
-                                 f"PUT MeasureReport/{rid}", 1, status, response)
+        return [self._guarded_put(KIND_MEASURE_REPORT, "MeasureReport",
+                                  report.get("id"), report, source_filename)]
 
     def _process_message(self, bundle: dict, source_filename: str,
-                         measure: str | None) -> FileOutcome:
-        # Stamp the message Bundle's OWN meta; nested content is persisted as part of
-        # the wrapper and is NOT registered with the collision tracker (D4b).
+                         measure: str | None) -> list[FileOutcome]:
+        # Stamp the message Bundle's OWN meta; its nested clinical copies are persisted
+        # via the authoritative collection Bundle, NOT here (Principle V/VI).
         bundle["meta"] = stamp(bundle.get("meta"), self.version, self.timestamp,
                                source_filename)
-        rid = bundle.get("id")
-        rtype = "Bundle"
-        if rid:
-            status = self.collisions.check(rtype, rid, bundle)
-            if status == "duplicate":
-                logger.info("Dedup: Bundle/%s already persisted with identical content.",
-                            rid)
+        # Promote ONLY the nested eICR Composition to a first-class resource (D2b).
+        composition = extract_eicr_composition(bundle)
+        if composition is not None:
+            self._stamp(composition, source_filename)
+            warn_unresolved_composition_refs(composition, document_resource_keys(bundle))
         self._maybe_mirror(measure, source_filename, bundle)
-        if self.dry_run:
-            logger.info("[dry-run] would PUT Bundle/%s (%s).", rid, source_filename)
-            return FileOutcome(source_filename, KIND_MESSAGE, f"PUT Bundle/{rid}",
-                               1, "succeeded", "dry-run")
-        status, response = self.client.submit_put("Bundle", rid, bundle)
-        return self._put_outcome(source_filename, KIND_MESSAGE, f"PUT Bundle/{rid}",
-                                 1, status, response)
 
-    def _maybe_mirror(self, measure: str | None, source_filename: str,
-                      payload: dict) -> None:
-        if self.write_mirror:
-            mirror_output(self.output_dir, measure, self.run_date, source_filename, payload)
-
-    def _txn_outcome(self, filename: str, count: int, status: int,
-                     response: dict) -> FileOutcome:
-        if 200 <= status < 300:
-            return FileOutcome(filename, KIND_COLLECTION, "POST-transaction",
-                               count, "succeeded", f"HTTP {status}")
-        logger.error("Transaction rejected for %s (HTTP %d): %s", filename, status,
-                     json.dumps(response))
-        return FileOutcome(filename, KIND_COLLECTION, "POST-transaction", count,
-                           "failed", f"HTTP {status}: {json.dumps(response)}")
-
-    def _put_outcome(self, filename: str, kind: str, action: str, count: int,
-                     status: int, response: dict) -> FileOutcome:
-        if 200 <= status < 300:
-            return FileOutcome(filename, kind, action, count, "succeeded", f"HTTP {status}")
-        logger.error("Submission rejected for %s (HTTP %d): %s", filename, status,
-                     json.dumps(response))
-        return FileOutcome(filename, kind, action, count, "failed",
-                           f"HTTP {status}: {json.dumps(response)}")
+        outcomes = [self._guarded_put(KIND_MESSAGE, "Bundle", bundle.get("id"),
+                                      bundle, source_filename)]
+        if composition is not None:
+            # The Composition's per-case GUID is collision-safe (D4b); persist it as its
+            # own first-class outcome in addition to the message Bundle.
+            outcomes.append(self._guarded_put(KIND_MESSAGE, "Composition",
+                                              composition.get("id"), composition,
+                                              source_filename))
+        else:
+            logger.warning("No eICR Composition found to promote in %s (D2b).",
+                           source_filename)
+        return outcomes
 
 
 # --------------------------------------------------------------------------- #
@@ -708,6 +861,12 @@ def run(args: argparse.Namespace) -> int:
     paths = resolve_paths(config, args)
     setup_logging(paths["log_dir"], args.verbose)
 
+    try:
+        type_filter = build_type_filter(args.only_types, args.skip_types)
+    except ValueError as exc:
+        logger.error(str(exc))
+        return 1
+
     config_errors = validate_config(config, args.dry_run)
     if config_errors:
         for err in config_errors:
@@ -736,6 +895,7 @@ def run(args: argparse.Namespace) -> int:
         output_dir=paths["output_dir"],
         write_mirror=not args.no_output_mirror,
         client=client,
+        type_filter=type_filter,
     )
 
     summary = RunSummary()
@@ -762,26 +922,27 @@ def run(args: argparse.Namespace) -> int:
             continue
 
         try:
-            summary.submitted += 1
-            outcome = pipeline.process(data, kind, item.filename, item.measure)
-        except CollisionError as exc:
-            logger.error("Collision processing %s: %s", item.filename, exc)
-            summary.failed += 1
-            summary.record(FileOutcome(item.filename, kind, "collision", 0,
-                                       "failed", str(exc)))
-            continue
-        except (SubmissionError, ValueError) as exc:
+            # Per-resource isolation: collision/submission failures are handled inside
+            # the pipeline and returned as individual outcomes; only a malformed bundle
+            # (planner ValueError) or unsupported kind fails the whole file here.
+            outcomes = pipeline.process(data, kind, item.filename, item.measure)
+        except ValueError as exc:
             logger.error("Failed processing %s: %s", item.filename, exc)
             summary.failed += 1
             summary.record(FileOutcome(item.filename, kind, "error", 0,
                                        "failed", str(exc)))
             continue
 
-        summary.record(outcome)
-        if outcome.status == "succeeded":
-            summary.succeeded += 1
-        elif outcome.status == "failed":
-            summary.failed += 1
+        for outcome in outcomes:
+            summary.record(outcome)
+            if outcome.status == "succeeded":
+                summary.succeeded += 1
+                summary.submitted += 1
+            elif outcome.status == "failed":
+                summary.failed += 1
+                summary.submitted += 1
+            elif outcome.status == "skipped":
+                summary.skipped += 1
 
     _report_summary(summary, args.dry_run)
     return summary.exit_code

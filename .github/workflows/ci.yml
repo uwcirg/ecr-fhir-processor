@@ -28,11 +28,15 @@ jobs:
       - name: Lint (ruff)
         run: ruff check process.py tests/
 
+      # Auto-discovers every tests/*.py, including the v1.1.0 suite: rewritten
+      # test_transform (per-resource PUT plan), test_promotion (eICR Composition),
+      # test_typefilter (--only-types/--skip-types), and the extended test_rerun.
       - name: Unit tests
         run: python3 -m unittest discover -s tests -v
 
-      # Discovery + classification + stamping + collection->transaction transform over
-      # the canonical fixtures. Must classify every fixture, failed=0, exit 0.
+      # Discovery + classification + stamping + independent per-resource PUT planning
+      # (plus the promoted eICR Composition) over the canonical fixtures. Must classify
+      # every fixture, plan a per-resource PUT for each contained resource, failed=0, exit 0.
       - name: Dry-run over test fixtures
         run: python3 process.py --input-dir test/input --dry-run --verbose --output-dir output
 

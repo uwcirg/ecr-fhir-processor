@@ -33,8 +33,23 @@ A leaf directory holding the file(s) for one case.
 ### FhirResource (a single resource to be persisted)
 - `resourceType`, `id` (**retained**, D1), `meta` (mutated additively, D4), body.
 - **Identity rule (FR-016)**: persisted at `[base]/<resourceType>/<id>` via PUT.
+- **Persistence-unit rule (D2, Principle V)**: each FhirResource is an **independent unit
+  of work** — its own `PUT`, its own outcome. No FhirResource shares an all-or-nothing
+  `transaction` with another; one resource's rejection does not roll back its siblings.
 - **Reference rule (FR-017, D3)**: relative references untouched; absolute non-target
   references untouched but WARNING-logged.
+
+### PromotedComposition (D2b, constitution Principle VI)
+The eICR `Composition` extracted from an in-population message Bundle's nested document
+Bundle and persisted as a first-class resource.
+- Source: `message Bundle → entry(content Bundle, type=document) → entry(Composition)`.
+- `id` — a **per-case GUID** (collision-safe for PUT; unlike the document Bundle's fixed
+  template-handle id, D4b).
+- Persisted at `[base]/Composition/<id>` via PUT, stamped with the same ProvenanceStamp.
+- **Promote only the Composition** — never the eICR's lower-fidelity duplicate clinical
+  resources (they would overwrite the authoritative collection-Bundle copies; Principle V).
+- **Validation**: each Composition reference SHOULD resolve to a persisted resource; an
+  unresolved reference is WARNING-logged (D3), not mutated.
 
 ### ProvenanceStamp
 The metadata applied to every persisted resource/bundle before submission. See the
@@ -52,6 +67,14 @@ Parsed from `config.json` (template `config.example.json`, reconciled per D7).
 - `paths{ input_dir, output_dir, log_dir }`
 - **Validation (FR-010)**: all `server.*` required and non-empty; reject values still
   equal to the example placeholders (`YOUR_*`); fail fast naming the offending field.
+
+### TypeFilter (D10, constitution Principle V)
+Optional CLI-supplied selector controlling which resource types are persisted this run, so
+a problem type can be landed independently.
+- `only_types[]` (from `--only-types`) — if set, persist *only* these FHIR resourceTypes.
+- `skip_types[]` (from `--skip-types`) — persist everything *except* these.
+- Accepts FHIR resourceTypes (e.g., `MeasureReport`) and the `measure-report` kind alias.
+- Excluded resources are counted `skipped` (not `failed`), D8. Default: persist all.
 
 ### RunSummary
 Aggregate of one execution (FR-014).
@@ -101,29 +124,35 @@ Applied to `resource.meta` (additive; never replaces existing `tag`/`profile`):
 
 ---
 
-## Input → Submission transforms (D2)
+## Input → Submission transforms (D2, D2b, D10)
 
 ```text
-collection Bundle ──► transaction Bundle
-  for each entry e:
+collection Bundle ──► independent per-resource PUTs (NO atomic transaction)
+  for each entry e (subject to TypeFilter, D10):
     stamp(e.resource)
-    e.request = { method: "PUT", url: f"{e.resource.resourceType}/{e.resource.id}" }
-  bundle.type = "transaction"
-  POST [base]  (atomic)
+    PUT [base]/{e.resource.resourceType}/{e.resource.id}    # its own request + outcome
+  # optional optimization: a single non-atomic `batch` Bundle (per-entry isolation) —
+  # NEVER a `transaction` Bundle (that reintroduces all-or-nothing rollback).
 
 MeasureReport (standalone) ──► stamp ──► PUT [base]/MeasureReport/{id}
-                                          (or single-entry transaction)
+  # independent; commonly deferred to a separate run via --only-types/--skip-types (D10),
+  # because Aidbox currently rejects the test MeasureReports on validation.
 
 message Bundle ──► stamp(bundle.meta) ──► PUT [base]/Bundle/{id}
+              └──► extract nested eICR Composition ──► stamp ──► PUT [base]/Composition/{id}   (D2b)
 ```
 
 **Notes**
-- The nested eICR document bundle inside a message Bundle is persisted as part of the
-  message Bundle resource (not separately unpacked in MVP); its relative references
-  resolve to the resources already persisted from the sibling collection Bundle (same
-  retained GUIDs).
-- A transaction is server-atomic: any entry failure rejects the whole bundle → that
-  file's resources are counted `failed` (D8).
+- **Independent persistence (D2, Principle V)**: every contained resource is PUT on its own;
+  a rejection is isolated to that resource and does not roll back siblings. There is no
+  scenario-wide transaction.
+- **Composition promotion (D2b, Principle VI)**: the eICR `Composition` is extracted from the
+  message Bundle's nested document Bundle and persisted first-class under its per-case GUID.
+  **Only** the Composition is promoted — the eICR's other nested clinical copies are
+  lower-fidelity duplicates and are NOT re-persisted over the authoritative collection-Bundle
+  resources (same retained GUIDs). The `MessageHeader` stays nested.
+- **Selectable types (D10)**: `--only-types`/`--skip-types` gate which resourceTypes are PUT
+  this run; excluded ones are `skipped`.
 
 ---
 

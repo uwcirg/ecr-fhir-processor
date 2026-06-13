@@ -20,13 +20,25 @@ Repository and Analytics Exchange" project.
   [`docs/input-data.md`](docs/input-data.md) for how the input files are organized and
   how the files within a scenario relate.
 - Stamps every persisted resource (and a message Bundle's own `meta`) with searchable
-  provenance metadata, then persists it:
-  - **collection** Bundles are converted to a FHIR **transaction** Bundle of
-    `PUT [Type]/<id>` entries (ids retained) and `POST`ed to the base.
+  provenance metadata, then persists it as **independent, first-class resources** —
+  there is **no atomic `transaction`** binding a scenario together, so failures isolate
+  per resource and resource types persist independently:
+  - **collection** Bundles are split into one **independent `PUT [Type]/<id>`** per
+    contained resource (ids retained, update-in-place). A non-atomic `batch` Bundle is an
+    allowed round-trip optimization; a `transaction` Bundle is **never** used.
   - standalone **MeasureReport**s and **message** Bundles are `PUT` under their retained
     ids.
+  - for in-population scenarios the nested eICR **`Composition`** is **promoted** to a
+    first-class resource (`PUT /Composition/<id>`) in addition to persisting the message
+    Bundle whole — making it queryable for downstream SQL-on-FHIR analytics. Only the
+    Composition is promoted (no lower-fidelity overwrite of the authoritative
+    collection-Bundle resources).
+- Lets a problem resource type be landed in a **separate idempotent run** via
+  `--only-types` / `--skip-types` (e.g. the test MeasureReports that currently fail
+  Aidbox validation): persist everything else first, then land the deferred type later —
+  the second run neither duplicates nor rolls back the first.
 - Logs every outcome to the console and a timestamped audit file, and exits non-zero if
-  any submission failed.
+  any submission failed (a rejected resource never blocks its siblings).
 
 The runtime uses the **Python 3 standard library only** — no `pip install` required.
 
@@ -55,6 +67,7 @@ cp config.example.json config.json
 
 ```text
 python3 process.py [--config PATH] [--input-dir PATH] [--measure NAME]
+                   [--only-types LIST] [--skip-types LIST]
                    [--output-dir PATH] [--no-output-mirror] [--dry-run]
                    [--log-dir PATH] [--verbose]
 ```
@@ -64,9 +77,11 @@ python3 process.py [--config PATH] [--input-dir PATH] [--measure NAME]
 | `--config` | `config.json` | Run config (template: `config.example.json`). |
 | `--input-dir` | `config.paths.input_dir` (`input`) | Root of the input tree. |
 | `--measure` | all | Restrict to one measure folder. |
+| `--only-types` | all | Comma-separated FHIR resourceTypes to persist **exclusively** this run (accepts the `measure-report` kind alias). Mutually exclusive with `--skip-types`. |
+| `--skip-types` | none | Comma-separated FHIR resourceTypes to **exclude** this run (excluded resources counted `skipped`). |
 | `--output-dir` | `config.paths.output_dir` (`output`) | Submitted-JSON mirror location. |
 | `--no-output-mirror` | off | Skip writing the local output mirror. |
-| `--dry-run` | off | Discover/classify/stamp/transform but **do not submit** (no server needed). |
+| `--dry-run` | off | Discover/classify/stamp/plan but **do not submit** (no server needed). |
 | `--log-dir` | `config.paths.log_dir` (`log`) | Audit-log directory. |
 | `--verbose` | off | Console DEBUG verbosity (file log is always detailed). |
 
@@ -78,6 +93,13 @@ python3 process.py --input-dir test/input --dry-run --verbose
 
 # Persist to the configured FHIR server:
 python3 process.py --input-dir test/input --config config.json
+
+# Independent per-type runs (the test MeasureReports currently fail Aidbox validation):
+#   1. land everything except MeasureReports …
+python3 process.py --input-dir test/input --skip-types MeasureReport
+#   2. … then, after the Aidbox validation profile is relaxed, land just those
+#      (idempotent — neither duplicates nor rolls back the first run):
+python3 process.py --input-dir test/input --only-types MeasureReport
 ```
 
 ## Provenance & search recipes
@@ -100,7 +122,8 @@ change.
 ## Testing & validation (dual gate)
 
 ```bash
-# 1. Unit tests for pure logic (transform, stamping, collision, version, config):
+# 1. Unit tests for pure logic (per-resource PUT planning, Composition promotion, type
+#    filter, stamping, collision, version, config):
 python3 -m unittest discover -s tests
 
 # 2. Conformance gate — validate the would-be submissions with the HL7 validator:

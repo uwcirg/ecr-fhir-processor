@@ -1,11 +1,15 @@
-"""T012 [US1]: collection -> transaction transform (D2, fhir-submission contract)."""
+"""T012 [US1]: collection -> independent per-resource PUT plan (D2, FR-020/FR-022).
+
+Rewritten for the constitution v1.1.0 model: a collection Bundle yields one independent
+PUT per contained resource (no atomic ``transaction`` Bundle).
+"""
 
 import unittest
 
 import process
 
 
-class TransformTest(unittest.TestCase):
+class PlanCollectionPutsTest(unittest.TestCase):
     def _collection(self):
         return {
             "resourceType": "Bundle",
@@ -16,26 +20,36 @@ class TransformTest(unittest.TestCase):
             ],
         }
 
-    def test_type_becomes_transaction(self):
-        out = process.transform_collection_to_transaction(self._collection())
-        self.assertEqual(out["type"], "transaction")
+    def test_one_put_unit_per_resource(self):
+        units = process.plan_collection_puts(self._collection())
+        self.assertEqual(len(units), 2)
+        self.assertTrue(all(isinstance(u, process.PutUnit) for u in units))
 
-    def test_each_entry_gets_put_request(self):
-        out = process.transform_collection_to_transaction(self._collection())
-        self.assertEqual(out["entry"][0]["request"],
-                         {"method": "PUT", "url": "Patient/p1"})
-        self.assertEqual(out["entry"][1]["request"],
-                         {"method": "PUT", "url": "Condition/c1"})
+    def test_put_urls_and_ids_retained(self):
+        units = process.plan_collection_puts(self._collection())
+        self.assertEqual(units[0].url, "Patient/p1")
+        self.assertEqual(units[1].url, "Condition/c1")
+        self.assertEqual(units[0].resource_id, "p1")
+        self.assertEqual(units[0].resource["id"], "p1")
 
-    def test_ids_retained_and_fullurl_preserved(self):
-        out = process.transform_collection_to_transaction(self._collection())
-        self.assertEqual(out["entry"][0]["resource"]["id"], "p1")
-        self.assertEqual(out["entry"][0]["fullUrl"], "urn:x")
-        self.assertNotIn("fullUrl", out["entry"][1])
+    def test_no_transaction_bundle_produced(self):
+        # The planner returns a plain list of units — never a Bundle of any type, and
+        # certainly never type="transaction" (FR-020, FR-022, D2).
+        result = process.plan_collection_puts(self._collection())
+        self.assertIsInstance(result, list)
+        self.assertNotIsInstance(result, dict)
 
-    def test_source_bundle_not_mutated(self):
+    def test_resource_shared_by_reference(self):
+        # Stamping the unit's resource must be reflected in the source bundle (the
+        # pipeline stamps via the unit before PUTting).
+        bundle = self._collection()
+        units = process.plan_collection_puts(bundle)
+        units[0].resource["_marker"] = True
+        self.assertTrue(bundle["entry"][0]["resource"]["_marker"])
+
+    def test_source_bundle_type_unchanged(self):
         src = self._collection()
-        process.transform_collection_to_transaction(src)
+        process.plan_collection_puts(src)
         self.assertEqual(src["type"], "collection")
         self.assertNotIn("request", src["entry"][0])
 
@@ -43,7 +57,7 @@ class TransformTest(unittest.TestCase):
         bad = {"resourceType": "Bundle", "type": "collection",
                "entry": [{"resource": {"resourceType": "Patient"}}]}
         with self.assertRaises(ValueError):
-            process.transform_collection_to_transaction(bad)
+            process.plan_collection_puts(bad)
 
 
 if __name__ == "__main__":

@@ -1,34 +1,52 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: (template / unversioned) → 1.0.0
-Rationale: Initial ratification of a concrete project constitution, replacing the
-unfilled template placeholders. MAJOR baseline (1.0.0).
+Version change: 1.1.0 → 1.1.1 (latest)
+Rationale (1.1.1, PATCH): Clarifying note only — Principle II now records that the APHL
+chronic-ds IG (cqf.aphl.chronic-ds#0.0.002) is an unpublished draft not resolvable from
+packages.fhir.org and is intentionally excluded from the validator -ig set (its Measure
+canonicals resolve to warnings, not errors). No principle added, removed, or redefined;
+intent unchanged. Authoritative rationale lives in known-validation-issues.md.
 
-Modified principles (renamed/reframed from the borrowed draft in
-constitution.content.tmp.md to fit an eCR *processor* that consumes → validates →
-persists, rather than a converter that generates):
-  - [PRINCIPLE_1] → I. Zero-Dependency Runtime
-  - [PRINCIPLE_2] → II. FHIR Profile Conformance (specific IGs injected)
-  - [PRINCIPLE_3] → III. Dual-Gate Validation Testing (Reference Validator + FHIR server)
-  - [PRINCIPLE_4] → IV. Multi-Measure / Multi-Population Input Coverage
-  - [PRINCIPLE_5] → V. Data Integrity and Defensive Processing
+----- Prior amendment (1.0.0 → 1.1.0) -----
+Rationale: MINOR amendment. Adds one new principle and materially expands one
+existing principle to accommodate a downstream SQL-on-FHIR analytics workflow that
+requires contained resources to be stored as independent, first-class resources and
+each resource type to be persistable independently (no all-encompassing transaction).
+No principle was removed or fundamentally redefined, so this is MINOR, not MAJOR.
 
-Added sections:
-  - "Target Implementation Guides" subsection (concrete IG package list, crosswalked
-    from test/input meta.profile values and docs/CDS_TestData_DocumentationFor05252026zip.pdf)
-  - Deployment & Security (Configuration over Code, Secret Protection, Clear Output)
-  - Development Workflow (CI Pipeline, README as Living Documentation, Single-File Simplicity)
-  - Governance (Amendment Process, Versioning, Compliance)
+Modified principles:
+  - V. Data Integrity and Defensive Processing — materially expanded: added the
+    "Independent persistence (no global transaction)" rule so a validation/acceptance
+    failure in one resource type (e.g., server-rejected MeasureReports) does not block
+    or roll back the others, and persistence is idempotently re-runnable per type.
 
-Removed sections: none (template placeholders fully replaced).
+Added principles:
+  - VI. Analytics-Ready Persistence Granularity — contained resources of collection
+    Bundles, and the eICR Composition within in-population eCR document Bundles, MUST
+    be persisted as independent, first-class, individually-addressable resources so a
+    downstream SQL-on-FHIR consumer (Aidbox ViewDefinitions) can flatten them. Promotion
+    must not overwrite higher-fidelity copies.
+
+Added sections: none beyond Principle VI.
+Removed sections: none.
 
 Templates requiring updates:
   - .specify/templates/plan-template.md  ✅ aligned (Constitution Check gate is
-    constitution-agnostic; no hard-coded principle references to update)
+    constitution-agnostic; no hard-coded principle references)
   - .specify/templates/spec-template.md  ✅ aligned (no principle-specific content)
   - .specify/templates/tasks-template.md ✅ aligned (no principle-specific content)
   - .specify/templates/checklist-template.md ✅ aligned
+
+Downstream artifacts requiring follow-up (NOT auto-edited by this command):
+  - specs/001-mvp-fhir-processor/plan.md ⚠ PENDING — Summary + Constitution Check still
+    describe collection→single-transaction persistence. Under amended V + new VI, replace
+    the atomic-transaction model with per-resource-type independent persistence (batch/
+    individual PUTs, runnable per type), and add Composition promotion. Re-run /speckit-plan.
+  - specs/001-mvp-fhir-processor/spec.md ⚠ PENDING — confirm FR-020/021/022 + OQ-2/OQ-3
+    reflect independent first-class persistence and per-type failure isolation.
+  - README.md ⚠ PENDING — "What it does" (transaction Bundle per collection) describes the
+    current code; update when the implementation moves to per-type independent persistence.
 
 Deferred TODOs:
   - TODO(ECR_IG_VERSION): pin the exact hl7.fhir.us.ecr package version once the
@@ -91,6 +109,12 @@ version changes without ad-hoc code edits.
   at version `0.0.002` (e.g.
   `…/Measure/DiabetesHemoglobinA1cHbA1cPoorControl9FHIR|0.0.002`,
   `…/Measure/ControllingHighBloodPressureFHIR|0.0.002`).
+  **Note (validator set):** `cqf.aphl.chronic-ds#0.0.002` is an unpublished draft available
+  only as a `build.fhir.org` CI tarball — it is **not** resolvable from `packages.fhir.org`,
+  and the test-data supplier does not validate against it. It is therefore **intentionally
+  excluded** from the validator `-ig` set; the fixtures' `…|0.0.002` Measure canonicals
+  resolve to **warnings, not errors** without it (acceptable per this principle). See
+  `known-validation-issues.md` → "Pinned IG set" for the authoritative rationale.
 
 **Rules:**
 
@@ -240,6 +264,59 @@ error in a public-health report is worse than a loud failure.
   is missing required data, it fails loudly rather than inventing content.
 - A resource that fails validation MUST NOT be persisted to the FHIR server; the
   failure MUST be surfaced (logged and reflected in exit status), not swallowed.
+- **Independent persistence (no global transaction):** Persistence MUST NOT be wrapped
+  in a single atomic transaction spanning all resource types. Each resource type MUST be
+  persistable independently, so that a validation or server-acceptance failure in one
+  type (e.g., MeasureReports the target server currently rejects) does not block, undo,
+  or roll back the persistence of the others.
+
+  **Rationale:** Resource types reach the server with different conformance maturity.
+  Forcing them through one all-or-nothing transaction means one rejected type defeats the
+  whole submission. Isolating persistence by type keeps the conformant majority landed
+  while a problem type is worked separately.
+
+  - Failures MUST be isolated and surfaced per resource type (logged + reflected in exit
+    status), never silently swallowed (consistent with the rule above).
+  - Persistence MUST be idempotently re-runnable per resource type — including a later,
+    separate run (e.g., after the target server's validation rules are relaxed for a type)
+    — without re-persisting, duplicating, or rolling back resources that already succeeded.
+    Retained-id PUT semantics (update-in-place) make this safe.
+
+### VI. Analytics-Ready Persistence Granularity
+
+The processor MUST persist clinical and reporting content at a granularity that makes it
+directly queryable by the downstream SQL-on-FHIR analytics workflow. That workflow can
+flatten only **first-class, individually-addressable** resources at `[base]/Type/<id>` —
+it cannot reach into a resource stored opaquely inside a Bundle.
+
+**Rationale:** The primary downstream consumer is a state Department of Health analytics
+team that authors SQL-on-FHIR `ViewDefinition`s against the target FHIR server (Aidbox). A
+`ViewDefinition` cannot select fields out of a whole-stored Bundle; only resources that
+exist independently on the server are analyzable. Persistence granularity therefore decides
+**what is analyzable downstream**, not merely how a submission is packaged — making it a
+correctness requirement for this project's purpose, not an implementation detail.
+
+**Rules:**
+
+- The resources contained in each `collection` input Bundle (`<scenario_id>.json`) MUST be
+  persisted as independent, first-class resources (`PUT [base]/Type/<retained-id>`) so each
+  is individually addressable, in addition to whatever Bundle-level persistence the project
+  retains for provenance.
+- For in-population scenarios that carry an eCR reporting Bundle (`Bundle_<uuid>.json`), the
+  eICR **`Composition`** MUST be extracted from the nested document Bundle and persisted as a
+  first-class resource (`PUT [base]/Composition/<id>`), in addition to persisting the eCR
+  Bundle itself. The Composition is the artifact the downstream team cares about most.
+- **No fidelity regression on promotion:** Promoting a nested resource to first-class MUST
+  NOT overwrite a higher-fidelity copy already persisted. Only the eICR `Composition` is
+  promoted from the message Bundle; the eICR's lower-fidelity duplicate clinical resources
+  MUST NOT be re-persisted over the authoritative `collection`-Bundle resources (see
+  Principle V — never produce silently incorrect output).
+- First-class persistence relies on retained resource ids (GUIDs) for idempotent
+  update-in-place, so re-runs neither duplicate nor diverge (see Principle V — independent,
+  re-runnable persistence).
+- This granularity requirement composes with Principle V's independent-persistence rule:
+  the contained resources, the eCR Bundle, the promoted Composition, and standalone
+  MeasureReports are each persistable as their own unit of work.
 
 ## Deployment & Security
 
@@ -384,4 +461,4 @@ reasoning in the relevant spec or PR — do not silently deviate.
 - When a principle conflicts with a practical constraint, document the exception and
   the reasoning in the relevant spec or PR.
 
-**Version**: 1.0.0 | **Ratified**: 2026-06-09 | **Last Amended**: 2026-06-09
+**Version**: 1.1.1 | **Ratified**: 2026-06-09 | **Last Amended**: 2026-06-12

@@ -1,7 +1,7 @@
 # Specification Quality Checklist: MVP eCR FHIR Processor
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2026-06-09
+**Created**: 2026-06-09 · **Last validated**: 2026-06-11 (amended for constitution v1.1.0)
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -44,5 +44,12 @@
 - These open questions are intentionally deferred (not [NEEDS CLARIFICATION]); they do
   not block the spec but must be settled during planning before implementation locks in
   an identity/submission approach.
+- **2026-06-11 amendment (constitution v1.1.0):** OQ-1 and OQ-2 are now **RESOLVED**. The
+  spec gained **US4** (downstream SQL-on-FHIR analytics consumer), **FR-020** (first-class
+  contained resources), **FR-021** (eICR Composition promotion), **FR-022** (no global
+  transaction; isolated per-resource failures), **FR-023** (independent, idempotent per-type
+  re-runs), **SC-009/010/011**, and matching edge cases. Re-validated: all checklist items
+  pass; no [NEEDS CLARIFICATION] markers introduced. This **supersedes** the earlier
+  transaction-batched persistence approach.
 - Items marked incomplete require spec updates before `/speckit-clarify` or
   `/speckit-plan`.

@@ -151,12 +151,23 @@ Every failing `OperationOutcome` is emitted by Aidbox's **FHIR Schema validation
   **no `value` and no `component`** (confirmed e.g. `group[0].stratifier[1].stratum[0]`).
   This is a genuine **base FHIR R4 invariant violation in supplier data** — Aidbox is correct
   to reject it; it is not strictness.
-- **Aidbox workaround:** **none granular.** There is no documented per-constraint /
-  per-invariant skip and no warnings-only mode for the FHIR Schema engine. The only
-  ingestion workaround that **preserves source fidelity** is disabling the engine entirely:
-  `BOX_FHIR_SCHEMA_VALIDATION=false` (box-wide; reverts to Aidbox's lighter built-in
-  structural validation and removes profile validation for the whole box). Fixing the data
-  would mutate supplier content and is out of scope per the gate philosophy.
+- **Aidbox workaround:** **none exists.** There is no documented per-constraint /
+  per-invariant skip and no warnings-only mode for the FHIR Schema engine, and the engine
+  **cannot be turned off** on a modern Aidbox (see below). So there is **no validation-side
+  lever** that lets an `mrp-2`-violating MeasureReport persist; the only ways past it are
+  fixing the data (mutates supplier content; out of scope per the gate philosophy) or
+  waiting on conformant real data.
+- **`BOX_FHIR_SCHEMA_VALIDATION=false` is NOT a validation switch — DO NOT USE IT (empirical,
+  2026-06-12):** it is an **engine selector**. On a modern Aidbox, FHIR Schema validation is
+  mandatory; setting this flag `false` reverts the box to the **deprecated legacy (Zen/Entity)
+  engine**. Observed consequences: the Aidbox console (`/ui/console#/settings`) warns *"This
+  Aidbox instance uses deprecated capabilities … Please migrate to FHIR Schema engine,"* and
+  **every FHIR PUT returns `HTTP 404 "PUT /fhir/<Type>/<id> not found"`** — the legacy engine
+  does not serve the REST update-by-id path the processor uses. It does **not** relax
+  validation; it breaks the FHIR API. (An earlier run where the flag appeared to have "no
+  effect" was simply a case where the env var had not yet taken effect in the running box —
+  the engine cannot be left running *and* unvalidated.) **Always run with
+  `BOX_FHIR_SCHEMA_VALIDATION=true`.**
 
 ### Cause 3 — `terminology-binding-error` on `improvementNotation`
 
@@ -176,7 +187,7 @@ Every failing `OperationOutcome` is emitted by Aidbox's **FHIR Schema validation
 
 | Lever | Scope | Silences | Notes |
 | --- | --- | --- | --- |
-| `BOX_FHIR_SCHEMA_VALIDATION=false` | box-wide | **all 3** | Disables FHIR Schema engine; reverts to lighter structural validation. Removes profile validation entirely. Cleanest single switch to ingest source as-is. |
+| `BOX_FHIR_SCHEMA_VALIDATION=false` | box-wide | **DO NOT USE** | Not a validation switch — an engine selector. `false` reverts to the deprecated legacy engine: console warns to migrate, and **every FHIR PUT 404s** (`not found`). Breaks the FHIR API; does not relax validation. FHIR Schema validation is mandatory — always keep `=true`. |
 | `BOX_FHIR_VALIDATION_SKIP_REFERENCE=true` + `aidbox-validation-skip` header | **per-request** | Cause 1 (**confirmed**) | Only per-PUT lever. Sent by the processor via `config.server.validation_skip` (e.g. `["reference"]`). Confirmed 2026-06-12 to also cover target-profile *conformance*, not just existence. |
 | `AIDBOX_TERMINOLOGY_SERVICE_BASE_URL` unset | box-wide | Cause 3 | No terminology server ⇒ binding validation skipped. |
 | `BOX_FHIR_VALIDATOR_STRICT_PROFILE_RESOLUTION` / `..._STRICT_EXTENSION_RESOLUTION` | box-wide | — | Default `false`: *unknown* profiles/extensions ignored. Does not help Causes 1–3 (profiles are loaded). |

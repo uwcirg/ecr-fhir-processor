@@ -100,8 +100,9 @@ per ViewDefinition file; the two operations are reported **separately** (FR-009)
 **Aggregation / exit code** (FR-008/FR-009, mirrors `RunSummary.exit_code`):
 - Exit `0` iff every discovered view both published and materialized successfully.
 - Any publish or materialize failure → **non-zero** exit (SC-004), after **all** views attempted.
-- Empty Patient set is **not** a failure: materialize succeeds, view has zero rows; reported as
-  zero rows, exit `0` (spec edge case).
+- Empty Patient set is **not** a failure: materialize succeeds and the step reports success,
+  exit `0`. The view returns zero rows when queried; the step reports the materialize outcome
+  (`viewName`), not a row count (spec edge case).
 
 ---
 

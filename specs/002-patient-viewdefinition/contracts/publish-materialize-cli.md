@@ -96,7 +96,7 @@ exits non-zero.
 
 | Situation | Behavior |
 |-----------|----------|
-| No Patient resources on server | materialize succeeds; view has 0 rows; report zero rows; exit 0 |
+| No Patient resources on server | materialize succeeds; step reports success; exit 0 (empty view is not a failure). View returns 0 rows on query — count comes from the query, not the step |
 | Server rejects ViewDefinition (non-conformant) | surface server validation error; exit non-zero; do not silently skip |
 | Materialize fails after successful publish | report publish=OK, materialize=FAILED separately; exit non-zero |
 | Config missing/invalid | fail at startup before contacting server, clear message |

@@ -88,8 +88,10 @@ and any other valid views are still attempted (FR-008, per-view isolation).
 
 Against a server with **zero** Patients, run step 2.
 
-**Expect**: publish + materialize both **succeed**, `SELECT count(*) FROM sof.patient_view` = 0,
-the step reports zero rows, exit `0` (empty is not a failure).
+**Expect**: publish + materialize both **succeed** and the step reports success, exit `0` (an
+empty view is not a failure). Querying the view confirms it is empty —
+`SELECT count(*) FROM sof.patient_view` = 0 — but that count comes from the query, not from the
+step's output.
 
 ## 7. Generalization check (SC-006, Story 3 — optional)
 

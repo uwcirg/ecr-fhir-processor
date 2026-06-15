@@ -88,8 +88,9 @@ publish/materialize step processes both without code changes to the step itself.
 
 ### Edge Cases
 
-- **No Patient resources on the server**: materialization succeeds but the view is empty —
-  the step reports zero rows rather than failing.
+- **No Patient resources on the server**: materialization still succeeds and the step reports
+  success (exit 0) — an empty view is not a failure. The view simply returns zero rows when
+  queried; the step itself does not count rows.
 - **Server rejects the ViewDefinition as non-conformant**: the step surfaces the server's
   validation error and exits non-zero; it does not silently skip.
 - **Materialization fails after a successful upload** (e.g., unsupported expression): the

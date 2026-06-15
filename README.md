@@ -102,6 +102,61 @@ python3 process.py --input-dir test/input --skip-types MeasureReport
 python3 process.py --input-dir test/input --only-types MeasureReport
 ```
 
+## Analytics views (`publish_views.py`)
+
+Downstream analytics (e.g. a DoH team) query flattened, one-row-per-resource SQL views
+rather than raw FHIR. Those views are defined by checked-in **SQL-on-FHIR
+`ViewDefinition`** resources under [`viewdefinitions/`](viewdefinitions/) and pushed to
+the target Aidbox server by a separate entry point, `publish_views.py`. It is a rare,
+schema-change activity (run it to *change* a view), so it is its own script — not a
+`process.py` subcommand — sharing the OAuth2 client, config, and logging via
+`fhir_common.py`.
+
+For each `*.json` ViewDefinition it discovers, the step `PUT`s it to
+`{base}/ViewDefinition/{id}` (update-in-place — re-runs never duplicate) and then `POST`s
+`{base}/ViewDefinition/{id}/$materialize`, reporting publish and materialize outcomes
+**separately per view**. Any publish or materialize failure is reflected in a non-zero
+exit; one view's failure never blocks another.
+
+```bash
+python3 publish_views.py [--config config.json]
+                         [--viewdefinitions-dir viewdefinitions]
+                         [--materialize-type view|materialized-view|table]
+                         [--dry-run] [--verbose] [--log-dir log]
+```
+
+- `--materialize-type` — the `$materialize` type. Defaults to `server.materialize_type`
+  in `config.json`, else **`view`** (an always-current SQL view that reflects live data
+  on every read; `materialized-view`/`table` are point-in-time snapshots Aidbox does not
+  auto-refresh).
+- `--dry-run` — discover and validate the ViewDefinition files and report the planned
+  `PUT`/`$materialize` calls **without contacting the server** (no credentials needed).
+
+```bash
+# Verify discovery + config without touching the server:
+python3 publish_views.py --dry-run --verbose
+
+# Publish + materialize every checked-in view (currently just Patient):
+python3 publish_views.py --config config.json --verbose
+```
+
+After a successful run the Patient view is queryable as `sof.patient_view` (one row per
+first-class Patient, default DoH demographic columns; absent source fields are `NULL`,
+never fabricated).
+
+**Conformance gate.** A `ViewDefinition` is a SQL-on-FHIR logical-model resource, outside
+the eCR/US-Core IG set, so its conformance gate is **Aidbox acceptance** (`PUT` accepted +
+`$materialize` succeeds) — *not* `validator_cli.jar`. A unit test checks the checked-in
+file is valid JSON with the required fields before any network call.
+
+### Adding another resource type
+
+The mechanism is resource-type-agnostic: drop a new `<type>.ViewDefinition.json` into
+[`viewdefinitions/`](viewdefinitions/) and re-run `publish_views.py` — **no code or
+invocation change**. Only the **Patient** view is authored today; views for other resource
+types are intentionally *not* written speculatively, and will be added once the analytics
+team specifies the columns they need.
+
 ## Provenance & search recipes
 
 Every persisted resource carries three searchable `meta.tag[]` entries plus

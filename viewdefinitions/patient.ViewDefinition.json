@@ -1,0 +1,28 @@
+{
+  "resourceType": "ViewDefinition",
+  "id": "patient",
+  "name": "patient_view",
+  "status": "active",
+  "resource": "Patient",
+  "description": "Flattened DoH demographic view: one row per first-class Patient. Default column set is an informed, reviewable default (FR-002), not a finalized analytics-team contract.",
+  "select": [
+    {
+      "column": [
+        { "name": "id", "path": "getResourceKey()", "type": "string" },
+        { "name": "mrn", "path": "identifier.where(type.coding.exists(code='MR')).value.first()", "type": "string" },
+        { "name": "name_family", "path": "name.first().family", "type": "string" },
+        { "name": "name_given", "path": "name.first().given.first()", "type": "string" },
+        { "name": "gender", "path": "gender", "type": "code" },
+        { "name": "birth_date", "path": "birthDate", "type": "date" },
+        { "name": "deceased", "path": "deceased.ofType(boolean)", "type": "boolean" },
+        { "name": "race_code", "path": "extension('http://hl7.org/fhir/us/core/StructureDefinition/us-core-race').extension('ombCategory').value.ofType(Coding).code.first()", "type": "code" },
+        { "name": "race_display", "path": "extension('http://hl7.org/fhir/us/core/StructureDefinition/us-core-race').extension('ombCategory').value.ofType(Coding).display.first()", "type": "string" },
+        { "name": "ethnicity_code", "path": "extension('http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity').extension('ombCategory').value.ofType(Coding).code.first()", "type": "code" },
+        { "name": "ethnicity_display", "path": "extension('http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity').extension('ombCategory').value.ofType(Coding).display.first()", "type": "string" },
+        { "name": "address_city", "path": "address.first().city", "type": "string" },
+        { "name": "address_state", "path": "address.first().state", "type": "string" },
+        { "name": "address_postal_code", "path": "address.first().postalCode", "type": "string" }
+      ]
+    }
+  ]
+}

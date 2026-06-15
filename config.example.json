@@ -9,7 +9,8 @@
     "token_endpoint": "YOUR_TOKEN_ENDPOINT",
     "client_id": "YOUR_CLIENT_ID",
     "client_secret": "YOUR_CLIENT_SECRET",
-    "validation_skip": []
+    "validation_skip": [],
+    "materialize_type": "view"
   },
   "ig_versions": {
     "hl7.fhir.us.core": "6.1.0",

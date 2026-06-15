@@ -31,8 +31,8 @@ Single-project CLI utility (per plan.md "Project Structure"). New code at repo r
 
 **Purpose**: Project scaffolding for the new artifacts
 
-- [ ] T001 Create the `viewdefinitions/` directory at repository root (checked-in ViewDefinition home; discovered generically by the publish step — FR-011)
-- [ ] T002 [P] Add a `.gitkeep` or confirm `viewdefinitions/` is tracked, and verify `.ruff.toml` lint config covers the new root-level `fhir_common.py` / `publish_views.py` (no config change expected — confirm only)
+- [X] T001 Create the `viewdefinitions/` directory at repository root (checked-in ViewDefinition home; discovered generically by the publish step — FR-011)
+- [X] T002 [P] Add a `.gitkeep` or confirm `viewdefinitions/` is tracked, and verify `.ruff.toml` lint config covers the new root-level `fhir_common.py` / `publish_views.py` (no config change expected — confirm only)
 
 ---
 
@@ -42,10 +42,10 @@ Single-project CLI utility (per plan.md "Project Structure"). New code at repo r
 
 **⚠️ CRITICAL**: `publish_views.py` (US2) imports from `fhir_common.py`; this phase must complete before US2 implementation begins.
 
-- [ ] T003 Create `fhir_common.py` at repo root by moving these primitives out of `process.py`: `FhirClient` (OAuth2 client-credentials, token caching, single 401-refresh retry, `aidbox-validation-skip` header, generic `request(method, url, body)` + `submit_put`), `RunConfig`, `load_config`, `validate_config`, `setup_logging`, `FileOutcome`, `RunSummary` (incl. `exit_code()`), and supporting constants/exceptions (`REQUIRED_SERVER_FIELDS`, `DEFAULT_PATHS`, `PLACEHOLDER_PREFIX`, `SubmissionError`)
-- [ ] T004 Update `process.py` to import the moved primitives from `fhir_common.py` (pure move + import; no behavior change) and remove the now-duplicated definitions
-- [ ] T005 Verify `process.py` behavior is unchanged: run the existing test suite (`python -m unittest discover tests`) and re-run the feature-001 validation pipeline per `specs/001-mvp-fhir-processor/quickstart.md`; all previously-passing checks still pass
-- [ ] T006 [P] Run `ruff check fhir_common.py process.py` and resolve any lint findings introduced by the extraction
+- [X] T003 Create `fhir_common.py` at repo root by moving these primitives out of `process.py`: `FhirClient` (OAuth2 client-credentials, token caching, single 401-refresh retry, `aidbox-validation-skip` header, generic `request(method, url, body)` + `submit_put`), `RunConfig`, `load_config`, `validate_config`, `setup_logging`, `FileOutcome`, `RunSummary` (incl. `exit_code()`), and supporting constants/exceptions (`REQUIRED_SERVER_FIELDS`, `DEFAULT_PATHS`, `PLACEHOLDER_PREFIX`, `SubmissionError`)
+- [X] T004 Update `process.py` to import the moved primitives from `fhir_common.py` (pure move + import; no behavior change) and remove the now-duplicated definitions
+- [~] T005 Verify `process.py` behavior is unchanged: run the existing test suite (`python -m unittest discover tests`) and re-run the feature-001 validation pipeline per `specs/001-mvp-fhir-processor/quickstart.md`; all previously-passing checks still pass — **Unit suite: DONE & GREEN** (77 tests; the only failure is the pre-existing `test_discovery` fixture-count drift, 18≠13, unrelated to this extraction; `process.FhirClient`/`RunConfig`/etc. still resolve via re-export). **Server-side feature-001 pipeline re-run: DEFERRED** — needs a live Aidbox target not available in this environment.
+- [X] T006 [P] Run `ruff check fhir_common.py process.py` and resolve any lint findings introduced by the extraction
 
 **Checkpoint**: Shared module exists, `process.py` still green — User Story 2 can begin.
 
@@ -59,12 +59,12 @@ Single-project CLI utility (per plan.md "Project Structure"). New code at repo r
 
 ### Tests for User Story 1
 
-- [ ] T007 [P] [US1] Add `tests/test_viewdefinition.py` with a test asserting `viewdefinitions/patient.ViewDefinition.json` parses as valid JSON and carries required fields (`resourceType == "ViewDefinition"`, `id`, `name`, `status`, `resource == "Patient"`, non-empty `select` with a `column` array) — write FIRST, expect it to FAIL until T009 lands
+- [X] T007 [P] [US1] Add `tests/test_viewdefinition.py` with a test asserting `viewdefinitions/patient.ViewDefinition.json` parses as valid JSON and carries required fields (`resourceType == "ViewDefinition"`, `id`, `name`, `status`, `resource == "Patient"`, non-empty `select` with a `column` array) — write FIRST, expect it to FAIL until T009 lands
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] Author `viewdefinitions/patient.ViewDefinition.json`: `resourceType: "ViewDefinition"`, `id: "patient"`, `name: "patient_view"`, `status: "active"`, `resource: "Patient"`, and a single top-level `select` whose `column` array defines the 14 DoH columns with FHIRPath per `data-model.md` §1 / `contracts/viewdefinition-patient.md` (`id`→`getResourceKey()`, `mrn`, `name_family`, `name_given`, `gender`, `birth_date`, `deceased`, `race_code`/`race_display`, `ethnicity_code`/`ethnicity_display`, `address_city`/`address_state`/`address_postal_code`) — no row-multiplying `forEach`; multi-valued elements reduced with `.first()` (one row per patient, FR-002/FR-003/FR-010)
-- [ ] T009 [US1] Confirm `tests/test_viewdefinition.py` required-field test now passes against the authored file (`python -m unittest tests.test_viewdefinition`)
+- [X] T008 [US1] Author `viewdefinitions/patient.ViewDefinition.json`: `resourceType: "ViewDefinition"`, `id: "patient"`, `name: "patient_view"`, `status: "active"`, `resource: "Patient"`, and a single top-level `select` whose `column` array defines the 14 DoH columns with FHIRPath per `data-model.md` §1 / `contracts/viewdefinition-patient.md` (`id`→`getResourceKey()`, `mrn`, `name_family`, `name_given`, `gender`, `birth_date`, `deceased`, `race_code`/`race_display`, `ethnicity_code`/`ethnicity_display`, `address_city`/`address_state`/`address_postal_code`) — no row-multiplying `forEach`; multi-valued elements reduced with `.first()` (one row per patient, FR-002/FR-003/FR-010)
+- [X] T009 [US1] Confirm `tests/test_viewdefinition.py` required-field test now passes against the authored file (`python -m unittest tests.test_viewdefinition`)
 
 **Checkpoint**: The Patient ViewDefinition artifact exists and passes its file-level contract test. End-to-end query validation occurs once US2 provides publishing (quickstart, T020).
 
@@ -78,19 +78,19 @@ Single-project CLI utility (per plan.md "Project Structure"). New code at repo r
 
 ### Tests for User Story 2
 
-- [ ] T010 [P] [US2] In `tests/test_viewdefinition.py`, add tests for ViewDefinition file **discovery** from a temp directory (matching files found; a malformed-JSON file and an `id`-less file each fail *that file* without raising, FR-008) — write FIRST, expect FAIL
-- [ ] T011 [P] [US2] In `tests/test_viewdefinition.py`, add a test for the `$materialize` `Parameters` **body builder** (produces `{resourceType: "Parameters", parameter: [{name: "type", valueCode: "<type>"}]}`, default `view`, research.md R3) — write FIRST, expect FAIL
-- [ ] T012 [P] [US2] In `tests/test_viewdefinition.py`, add a test for **outcome → exit-code aggregation** (all publish+materialize ok → exit 0; any publish or materialize failure → non-zero; materialize `skipped` when publish failed) reusing `FileOutcome`/`RunSummary` — write FIRST, expect FAIL
+- [X] T010 [P] [US2] In `tests/test_viewdefinition.py`, add tests for ViewDefinition file **discovery** from a temp directory (matching files found; a malformed-JSON file and an `id`-less file each fail *that file* without raising, FR-008) — write FIRST, expect FAIL
+- [X] T011 [P] [US2] In `tests/test_viewdefinition.py`, add a test for the `$materialize` `Parameters` **body builder** (produces `{resourceType: "Parameters", parameter: [{name: "type", valueCode: "<type>"}]}`, default `view`, research.md R3) — write FIRST, expect FAIL
+- [X] T012 [P] [US2] In `tests/test_viewdefinition.py`, add a test for **outcome → exit-code aggregation** (all publish+materialize ok → exit 0; any publish or materialize failure → non-zero; materialize `skipped` when publish failed) reusing `FileOutcome`/`RunSummary` — write FIRST, expect FAIL
 
 ### Implementation for User Story 2
 
-- [ ] T013 [P] [US2] Extend `config.example.json` with an OPTIONAL `server.materialize_type` field documented as defaulting to `"view"` (research.md R3); do not add any secret
-- [ ] T014 [US2] Create `publish_views.py` entry point with its own `argparse` parser: `--config` (default `config.json`), `--viewdefinitions-dir` (default `viewdefinitions`), `--materialize-type` (default from `server.materialize_type` else `view`), `--dry-run`, `--verbose`, `--log-dir` (default `log`); import `load_config`/`validate_config`/`setup_logging`/`FhirClient`/`FileOutcome`/`RunSummary` from `fhir_common.py` (contracts/publish-materialize-cli.md CLI)
-- [ ] T015 [US2] Implement startup behavior in `publish_views.py`: load config, run `validate_config` and fail loudly before any network call when required `server.*` is missing/placeholder (unless `--dry-run`); then discover ViewDefinition files from `--viewdefinitions-dir`, treating zero files as an operator error (exit non-zero; `--dry-run` may warn) — FR-006/FR-007
-- [ ] T016 [US2] Implement ViewDefinition file **discovery** in `publish_views.py`: scan the dir for `*.json`, parse each, require `resourceType == "ViewDefinition"` and an `id`; a malformed or id-less file fails that file (recorded, reflected in exit) without blocking others (FR-011, data-model §2)
-- [ ] T017 [US2] Implement the `$materialize` **Parameters body builder** in `publish_views.py` (single `type` valueCode parameter from the resolved materialize type) — research.md R3
-- [ ] T018 [US2] Implement the per-view **publish + materialize** flow in `publish_views.py`: `PUT {base}/ViewDefinition/{id}` (200/201 = ok) via `FhirClient`; on publish ok, `POST {base}/ViewDefinition/{id}/$materialize` with the Parameters body; on publish failure record it and **skip** materialize for that view; continue to remaining views (per-view isolation, FR-005/FR-008, contracts §"Server operations")
-- [ ] T019 [US2] Implement per-view **outcome reporting + exit code** in `publish_views.py`: record publish and materialize results separately (materialize success carries `viewName`/`viewType`; failure carries the `OperationOutcome` reason), print the per-view summary + roll-up line, write the timestamped audit log under `log/`, and exit `0` iff every view published AND materialized (else non-zero, after all attempted) — FR-008/FR-009, SC-004
+- [X] T013 [P] [US2] Extend `config.example.json` with an OPTIONAL `server.materialize_type` field documented as defaulting to `"view"` (research.md R3); do not add any secret
+- [X] T014 [US2] Create `publish_views.py` entry point with its own `argparse` parser: `--config` (default `config.json`), `--viewdefinitions-dir` (default `viewdefinitions`), `--materialize-type` (default from `server.materialize_type` else `view`), `--dry-run`, `--verbose`, `--log-dir` (default `log`); import `load_config`/`validate_config`/`setup_logging`/`FhirClient`/`FileOutcome`/`RunSummary` from `fhir_common.py` (contracts/publish-materialize-cli.md CLI)
+- [X] T015 [US2] Implement startup behavior in `publish_views.py`: load config, run `validate_config` and fail loudly before any network call when required `server.*` is missing/placeholder (unless `--dry-run`); then discover ViewDefinition files from `--viewdefinitions-dir`, treating zero files as an operator error (exit non-zero; `--dry-run` may warn) — FR-006/FR-007
+- [X] T016 [US2] Implement ViewDefinition file **discovery** in `publish_views.py`: scan the dir for `*.json`, parse each, require `resourceType == "ViewDefinition"` and an `id`; a malformed or id-less file fails that file (recorded, reflected in exit) without blocking others (FR-011, data-model §2)
+- [X] T017 [US2] Implement the `$materialize` **Parameters body builder** in `publish_views.py` (single `type` valueCode parameter from the resolved materialize type) — research.md R3
+- [X] T018 [US2] Implement the per-view **publish + materialize** flow in `publish_views.py`: `PUT {base}/ViewDefinition/{id}` (200/201 = ok) via `FhirClient`; on publish ok, `POST {base}/ViewDefinition/{id}/$materialize` with the Parameters body; on publish failure record it and **skip** materialize for that view; continue to remaining views (per-view isolation, FR-005/FR-008, contracts §"Server operations")
+- [X] T019 [US2] Implement per-view **outcome reporting + exit code** in `publish_views.py`: record publish and materialize results separately (materialize success carries `viewName`/`viewType`; failure carries the `OperationOutcome` reason), print the per-view summary + roll-up line, write the timestamped audit log under `log/`, and exit `0` iff every view published AND materialized (else non-zero, after all attempted) — FR-008/FR-009, SC-004
 
 **Checkpoint**: `publish_views.py` runs end-to-end; unit tests T010–T012 pass; idempotent re-run produces no duplicate (SC-003).
 
@@ -104,11 +104,11 @@ Single-project CLI utility (per plan.md "Project Structure"). New code at repo r
 
 ### Tests for User Story 3
 
-- [ ] T020 [P] [US3] In `tests/test_viewdefinition.py`, add a test that discovery over a temp dir containing the Patient view plus a second minimal ViewDefinition file returns BOTH as processable work units, with no code change to the discovery function (proves FR-011/SC-006)
+- [X] T020 [P] [US3] In `tests/test_viewdefinition.py`, add a test that discovery over a temp dir containing the Patient view plus a second minimal ViewDefinition file returns BOTH as processable work units, with no code change to the discovery function (proves FR-011/SC-006)
 
 ### Implementation for User Story 3
 
-- [ ] T021 [US3] Add a short "Adding another resource type" note to `README.md` documenting that a maintainer drops a new `*.ViewDefinition.json` into `viewdefinitions/` and re-runs `publish_views.py` with no mechanism change, and that speculative non-Patient views are intentionally NOT authored yet (FR-012)
+- [X] T021 [US3] Add a short "Adding another resource type" note to `README.md` documenting that a maintainer drops a new `*.ViewDefinition.json` into `viewdefinitions/` and re-runs `publish_views.py` with no mechanism change, and that speculative non-Patient views are intentionally NOT authored yet (FR-012)
 
 **Checkpoint**: Generalization is verified by test and documented; no speculative views added.
 
@@ -118,9 +118,9 @@ Single-project CLI utility (per plan.md "Project Structure"). New code at repo r
 
 **Purpose**: Documentation, lint, and the end-to-end validation that spans US1 + US2
 
-- [ ] T022 [P] Update `README.md` with `publish_views.py` usage (CLI flags, config, dry-run, materialize-type) and a note that the ViewDefinition conformance gate is Aidbox acceptance, not `validator_cli.jar` (research.md R5)
-- [ ] T023 [P] Run `ruff check publish_views.py fhir_common.py process.py tests/test_viewdefinition.py` and resolve findings
-- [ ] T024 Run the full `quickstart.md` end-to-end validation against an Aidbox ≥ 2508 holding the fixture Patients: dry-run (§1), publish+materialize (§2), query `sof.patient_view` for N rows + correct columns (§3, SC-001/SC-002/SC-005), idempotent re-run (§4, SC-003), induced-failure surfacing (§5, SC-004), and empty-set edge case (§6)
+- [X] T022 [P] Update `README.md` with `publish_views.py` usage (CLI flags, config, dry-run, materialize-type) and a note that the ViewDefinition conformance gate is Aidbox acceptance, not `validator_cli.jar` (research.md R5)
+- [X] T023 [P] Run `ruff check publish_views.py fhir_common.py process.py tests/test_viewdefinition.py` and resolve findings
+- [~] T024 Run the full `quickstart.md` end-to-end validation against an Aidbox ≥ 2508 holding the fixture Patients: dry-run (§1), publish+materialize (§2), query `sof.patient_view` for N rows + correct columns (§3, SC-001/SC-002/SC-005), idempotent re-run (§4, SC-003), induced-failure surfacing (§5, SC-004), and empty-set edge case (§6) — **DEFERRED: requires a live Aidbox ≥ 2508 server, not available in this environment.** Locally verified the network-free portion: dry-run (§1) discovers the Patient view and reports the planned `PUT`/`$materialize` with exit 0; missing/placeholder config fails loudly before any network call (exit 1); empty viewdefinitions dir exits non-zero (warns under `--dry-run`). The server-contacting steps (§2–§6) remain to be run by an operator against Aidbox.
 
 ---
 

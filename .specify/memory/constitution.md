@@ -1,12 +1,57 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.1.0 → 1.1.1 (latest)
-Rationale (1.1.1, PATCH): Clarifying note only — Principle II now records that the APHL
-chronic-ds IG (cqf.aphl.chronic-ds#0.0.002) is an unpublished draft not resolvable from
-packages.fhir.org and is intentionally excluded from the validator -ig set (its Measure
-canonicals resolve to warnings, not errors). No principle added, removed, or redefined;
-intent unchanged. Authoritative rationale lives in known-validation-issues.md.
+Version change: 1.1.1 → 1.2.0 (latest)
+Rationale (1.2.0, MINOR): Adds one new principle (VII) and materially expands the rationale
+of Principle VI to reflect a new project responsibility: this project now AUTHORS the
+SQL-on-FHIR ViewDefinitions and a publish/materialize script (previously the constitution
+framed the downstream DoH team as the sole author). No principle was removed or
+fundamentally redefined, so this is MINOR, not MAJOR.
+
+Added principles:
+  - VII. Analytics View Definitions and Materialization — for each resource type the
+    analytics team needs, the project MUST provide an Aidbox SQL-on-FHIR-compliant
+    ViewDefinition resource plus a script that PUTs it to the server and invokes
+    $materialize. Scope is incremental and demand-driven: Patient is the first and
+    currently only required ViewDefinition; other resource types are added only when the
+    analytics team specifies the columns they want. The script obeys Principle I
+    (stdlib-only), the Deployment & Security section (base URL/creds from config), and
+    Principle V (idempotent, re-runnable, per-type failure isolation).
+
+Modified principles:
+  - VI. Analytics-Ready Persistence Granularity — rationale expanded so it records that
+    this project authors and materializes the ViewDefinitions on the analytics team's
+    behalf (cross-links Principle VII). No rule changed.
+
+Modified sections:
+  - Top summary blockquote — adds that the processor also publishes SQL-on-FHIR
+    ViewDefinitions that flatten the persisted resources for downstream analytics.
+
+Templates requiring updates:
+  - .specify/templates/plan-template.md  ✅ aligned (Constitution Check is a generic gate;
+    no hard-coded principle references)
+  - .specify/templates/spec-template.md  ✅ aligned
+  - .specify/templates/tasks-template.md ✅ aligned
+  - .specify/templates/checklist-template.md ✅ aligned
+
+Downstream artifacts requiring follow-up (NOT auto-edited by this command):
+  - A new feature spec (e.g., specs/002-viewdefinition-materialize/) ⚠ PENDING — the
+    ViewDefinition + $materialize work is a distinct feature; run /speckit-specify then
+    /speckit-plan to scope it (start with Patient).
+  - README.md ⚠ PENDING — "What it does" should mention the project now authors and
+    materializes SQL-on-FHIR ViewDefinitions (Patient first), not only that persisted
+    resources are queryable by the downstream team.
+
+Deferred TODOs:
+  - TODO(VIEWDEF_RESOURCE_TYPES): only Patient is specified so far; the set of other
+    resource-type ViewDefinitions awaits the analytics team's column requirements.
+
+----- Prior amendment (1.1.0 → 1.1.1, PATCH) -----
+Clarifying note only — Principle II now records that the APHL chronic-ds IG
+(cqf.aphl.chronic-ds#0.0.002) is an unpublished draft not resolvable from packages.fhir.org
+and is intentionally excluded from the validator -ig set (its Measure canonicals resolve to
+warnings, not errors). No principle added, removed, or redefined; intent unchanged.
+Authoritative rationale lives in known-validation-issues.md.
 
 ----- Prior amendment (1.0.0 → 1.1.0) -----
 Rationale: MINOR amendment. Adds one new principle and materially expands one
@@ -60,8 +105,9 @@ Deferred TODOs:
 > Principles governing the development, testing, and maintenance of a Python
 > utility that consumes FHIR R4 electronic Case Reporting (eCR) resources for
 > chronic-disease quality measures, validates them against both the HL7 FHIR
-> Reference Validator (CLI) and a target FHIR server, and persists them to that
-> FHIR server.
+> Reference Validator (CLI) and a target FHIR server, persists them to that
+> FHIR server, and publishes SQL-on-FHIR ViewDefinitions that flatten the
+> persisted resources for downstream analytics.
 
 ## Core Principles
 
@@ -290,8 +336,9 @@ flatten only **first-class, individually-addressable** resources at `[base]/Type
 it cannot reach into a resource stored opaquely inside a Bundle.
 
 **Rationale:** The primary downstream consumer is a state Department of Health analytics
-team that authors SQL-on-FHIR `ViewDefinition`s against the target FHIR server (Aidbox). A
-`ViewDefinition` cannot select fields out of a whole-stored Bundle; only resources that
+team that runs SQL-on-FHIR `ViewDefinition`s against the target FHIR server (Aidbox); this
+project authors and materializes those `ViewDefinition`s on the team's behalf (Principle
+VII). A `ViewDefinition` cannot select fields out of a whole-stored Bundle; only resources that
 exist independently on the server are analyzable. Persistence granularity therefore decides
 **what is analyzable downstream**, not merely how a submission is packaged — making it a
 correctness requirement for this project's purpose, not an implementation detail.
@@ -317,6 +364,44 @@ correctness requirement for this project's purpose, not an implementation detail
 - This granularity requirement composes with Principle V's independent-persistence rule:
   the contained resources, the eCR Bundle, the promoted Composition, and standalone
   MeasureReports are each persistable as their own unit of work.
+
+### VII. Analytics View Definitions and Materialization
+
+For each resource type the downstream analytics team needs, the project MUST provide an
+Aidbox SQL-on-FHIR–compliant `ViewDefinition` resource, plus a script that publishes those
+ViewDefinitions to the target FHIR server and materializes them.
+
+**Rationale:** Principle VI guarantees the underlying resources are first-class and
+flattenable; the actual analytics deliverable is the flattened view itself. The DoH
+analytics team specifies *which* columns and resource types it needs; this project owns
+authoring conformant ViewDefinitions and driving their materialization so the views exist
+and stay current on the server. ViewDefinition authoring is therefore a project
+responsibility, not a downstream-only concern.
+
+**Rules:**
+
+- Each `ViewDefinition` MUST conform to the SQL-on-FHIR `ViewDefinition` specification as
+  implemented by Aidbox, and MUST be a checked-in, version-controlled resource file — not
+  generated ad hoc at runtime.
+- **Incremental, demand-driven scope:** `Patient` is the first and currently the only
+  required ViewDefinition. Additional resource-type ViewDefinitions MUST NOT be added
+  speculatively; add one only once the analytics team specifies the fields/columns it wants
+  from that resource type. Until then, the absence of other ViewDefinitions is intentional,
+  not incomplete work.
+- The publish/materialize script MUST (a) `PUT` each ViewDefinition to
+  `[base]/ViewDefinition/<id>` and (b) invoke `[base]/ViewDefinition/<id>/$materialize`. It
+  MUST be idempotently re-runnable (retained ids, update-in-place) so re-runs neither
+  duplicate nor diverge views (consistent with Principle V).
+- The script MUST obey Principle I (Python stdlib only; reuse the existing FHIR
+  client/auth) and the Deployment & Security section (server base URL and credentials come
+  from configuration, never hardcoded).
+- A ViewDefinition the server rejects — on publish or on `$materialize` — MUST surface the
+  failure (logged and reflected in exit status), never swallowed (Principle V).
+  Per-resource-type isolation applies: one view's failure MUST NOT block publishing or
+  materializing the others.
+- ViewDefinitions MUST select only from first-class, individually-addressable resources
+  (Principle VI); a view MUST NOT depend on content that exists only inside an un-promoted
+  Bundle.
 
 ## Deployment & Security
 
@@ -461,4 +546,4 @@ reasoning in the relevant spec or PR — do not silently deviate.
 - When a principle conflicts with a practical constraint, document the exception and
   the reasoning in the relevant spec or PR.
 
-**Version**: 1.1.1 | **Ratified**: 2026-06-09 | **Last Amended**: 2026-06-12
+**Version**: 1.2.0 | **Ratified**: 2026-06-09 | **Last Amended**: 2026-06-15

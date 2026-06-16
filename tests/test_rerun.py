@@ -76,7 +76,8 @@ class ReRunIdempotencyTest(unittest.TestCase):
             for entry in restamped["entry"]:
                 own = [t for t in entry["resource"]["meta"]["tag"]
                        if t["system"] in process.OWN_TAG_SYSTEMS]
-                self.assertEqual(len(own), 3)
+                # Four own tags since 003 (adds cms-measure); re-stamp must not accumulate.
+                self.assertEqual(len(own), 4)
 
     def test_deferred_type_split_leaves_clinical_content_untouched(self):
         # A --skip-types run then an --only-types run land disjoint resource sets; neither

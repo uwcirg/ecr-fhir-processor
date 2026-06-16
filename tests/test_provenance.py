@@ -31,7 +31,8 @@ class ProvenanceTest(unittest.TestCase):
         # Re-stamp with a new run -> still exactly three own tags (INV-2).
         meta2 = process.stamp(meta, "v2", "2026-06-10T00:00:00+00:00", "other.json")
         own = [t for t in meta2["tag"] if t["system"] in process.OWN_TAG_SYSTEMS]
-        self.assertEqual(len(own), 3)
+        # Four own tags since 003: processed-by, processed-on, source-file, cms-measure.
+        self.assertEqual(len(own), 4)
         systems = self._systems(meta2)
         self.assertEqual(systems[process.SYSTEM_PROCESSED_BY]["version"], "v2")
         self.assertEqual(systems[process.SYSTEM_SOURCE_FILE]["code"], "other.json")
@@ -52,7 +53,8 @@ class ProvenanceTest(unittest.TestCase):
         res = {"resourceType": "Patient", "id": "p1"}
         process.stamp_resource(res, VERSION, TS, SRC)
         self.assertIn("meta", res)
-        self.assertEqual(len(res["meta"]["tag"]), 3)
+        # Four tags since 003 (adds the cms-measure attribution tag).
+        self.assertEqual(len(res["meta"]["tag"]), 4)
 
 
 if __name__ == "__main__":

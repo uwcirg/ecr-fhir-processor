@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -47,12 +48,29 @@ PROVENANCE_BASE = "https://uwcirg.github.io/ecr-fhir-processor/CodeSystem"
 SYSTEM_PROCESSED_BY = f"{PROVENANCE_BASE}/processed-by"
 SYSTEM_PROCESSED_ON = f"{PROVENANCE_BASE}/processed-on"
 SYSTEM_SOURCE_FILE = f"{PROVENANCE_BASE}/source-file"
+#: The CMS quality-measure attribution tag system (003; data-model §2, contract C-1).
+SYSTEM_CMS_MEASURE = f"{PROVENANCE_BASE}/cms-measure"
 
 #: The set of meta.tag systems this processor owns (used for idempotent re-stamp).
-OWN_TAG_SYSTEMS = frozenset({SYSTEM_PROCESSED_BY, SYSTEM_PROCESSED_ON, SYSTEM_SOURCE_FILE})
+#: SYSTEM_CMS_MEASURE is included so re-stamp replaces the cms-measure tag in place,
+#: keeping exactly one (INV-CMS-2) and making US3 re-attribution-on-rename safe (R5).
+OWN_TAG_SYSTEMS = frozenset({
+    SYSTEM_PROCESSED_BY, SYSTEM_PROCESSED_ON, SYSTEM_SOURCE_FILE, SYSTEM_CMS_MEASURE,
+})
 
 #: Stable processor identity code stamped into provenance.
 PROCESSOR_IDENTITY = "ecr-fhir-processor"
+
+#: Authoritative CMS-code ↔ measure-slug crosswalk (003 FR-010; data-model §3). The single
+#: source of truth for the cms-measure tag's display and the directory/filename disagreement
+#: check; the constitution Principle-IV measures. The inverse map resolves a directory slug
+#: back to its CMS code for the disagreement signal.
+MEASURE_SLUG_BY_CMS = {
+    "CMS2": "depression-screening",
+    "CMS122": "poor-diabetic-control",
+    "CMS165": "controllable-bp",
+}
+CMS_BY_MEASURE_SLUG = {slug: cms for cms, slug in MEASURE_SLUG_BY_CMS.items()}
 
 #: Input classification kinds.
 KIND_COLLECTION = "collection-bundle"
@@ -161,12 +179,24 @@ def processing_timestamp() -> str:
 # --------------------------------------------------------------------------- #
 
 
+def cms_measure_from_filename(filename: str) -> str:
+    """Derive the CMS quality-measure code purely from the input filename (003 FR-001/006).
+
+    Matches ``^CMS\\d+`` case-insensitively against the bare filename and returns the
+    normalized uppercase ``CMS<digits>`` (e.g. ``cms165_x.json`` -> ``CMS165``). A filename
+    that does not begin with the convention returns the positive sentinel ``"unknown"``.
+    The parent directory is never consulted for the value (single source of truth — R2).
+    """
+    match = re.match(r"CMS(\d+)", Path(filename).name, re.IGNORECASE)
+    return f"CMS{match.group(1)}" if match else "unknown"
+
+
 def stamp(meta: dict | None, version: str, timestamp: str, source_filename: str) -> dict:
     """Additively stamp this processor's provenance onto a resource ``meta``.
 
-    Adds three ``meta.tag[]`` entries (processed-by+version, processed-on, source-file)
-    and ``meta.source``. Idempotent: this processor's own prior tags (matched by
-    ``system``) are replaced, never appended (INV-2). Pre-existing tags from other
+    Adds four ``meta.tag[]`` entries (processed-by+version, processed-on, source-file,
+    cms-measure) and ``meta.source``. Idempotent: this processor's own prior tags (matched
+    by ``system``) are replaced, never appended (INV-2). Pre-existing tags from other
     systems and ``meta.profile`` are preserved (INV-3). Returns the meta dict.
     """
     if meta is None:
@@ -182,6 +212,14 @@ def stamp(meta: dict | None, version: str, timestamp: str, source_filename: str)
     })
     tags.append({"system": SYSTEM_PROCESSED_ON, "code": timestamp})
     tags.append({"system": SYSTEM_SOURCE_FILE, "code": source_filename})
+    # CMS-measure attribution derived from the filename (003; contract C-1..C-7). One tag,
+    # replaced in place on re-stamp (SYSTEM_CMS_MEASURE is in OWN_TAG_SYSTEMS).
+    cms_code = cms_measure_from_filename(source_filename)
+    tags.append({
+        "system": SYSTEM_CMS_MEASURE,
+        "code": cms_code,
+        "display": MEASURE_SLUG_BY_CMS.get(cms_code, "unknown measure"),
+    })
     meta["tag"] = tags
     meta["source"] = f"{SYSTEM_PROCESSED_BY}#{version}"
     return meta
@@ -457,6 +495,15 @@ def discover_inputs(root: str, measure_filter: str | None = None) -> list[InputF
         population = rel[1] if len(rel) >= 3 else None
         if measure_filter and measure != measure_filter:
             continue
+        # Disagreement signal (003 FR-007): warn — never silently reconcile (Principle V) —
+        # when the filename code is concrete AND the directory slug maps to a *different*
+        # concrete code. The filename remains authoritative for the tag regardless.
+        file_code = cms_measure_from_filename(path.name)
+        dir_code = CMS_BY_MEASURE_SLUG.get(measure)
+        if file_code != "unknown" and dir_code is not None and file_code != dir_code:
+            logger.warning(
+                "CMS measure mismatch for %s: filename=%s directory=%s (%s); "
+                "using filename.", path.name, file_code, dir_code, measure)
         found.append(InputFile(path=path, measure=measure, population=population))
     return found
 

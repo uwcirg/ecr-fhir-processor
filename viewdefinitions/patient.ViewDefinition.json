@@ -21,7 +21,8 @@
         { "name": "ethnicity_display", "path": "extension('http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity').extension('ombCategory').value.ofType(Coding).display.first()", "type": "string" },
         { "name": "address_city", "path": "address.first().city", "type": "string" },
         { "name": "address_state", "path": "address.first().state", "type": "string" },
-        { "name": "address_postal_code", "path": "address.first().postalCode", "type": "string" }
+        { "name": "address_postal_code", "path": "address.first().postalCode", "type": "string" },
+        { "name": "cms_measure", "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/cms-measure').code.first()", "type": "code" }
       ]
     }
   ],

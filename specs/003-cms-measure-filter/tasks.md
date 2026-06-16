@@ -34,7 +34,7 @@ Single-project CLI at repo root: `process.py`, `viewdefinitions/`, `tests/`, `RE
 
 **Purpose**: Confirm a clean, green baseline before additive changes.
 
-- [ ] T001 Establish baseline: run `python -m unittest discover -s tests -v` and `ruff check .` from repo root; confirm all existing tests pass and lint is clean before modifying `process.py`.
+- [X] T001 Establish baseline: run `python -m unittest discover -s tests -v` and `ruff check .` from repo root; confirm all existing tests pass and lint is clean before modifying `process.py`.
 
 ---
 
@@ -46,8 +46,8 @@ depend on. Pure additions — no behavior change yet.
 **⚠️ CRITICAL**: The `cms-measure` tag-system URL defined here is the single contract the US1
 view column, the US2 stamp, and the US3 re-attribution all reference; complete before story work.
 
-- [ ] T002 Add `SYSTEM_CMS_MEASURE = f"{PROVENANCE_BASE}/cms-measure"` beside the other `SYSTEM_*` constants (process.py ~line 49) and add `SYSTEM_CMS_MEASURE` to the `OWN_TAG_SYSTEMS` frozenset (process.py ~line 52) so idempotent re-stamp replaces it in place (research R5, contract C-5).
-- [ ] T003 Add the `MEASURE_SLUG_BY_CMS = {"CMS2": "depression-screening", "CMS122": "poor-diabetic-control", "CMS165": "controllable-bp"}` crosswalk constant (and a derived inverse map) beside the canonical constants in process.py — the single source of truth for CMS↔slug (FR-010, data-model §3).
+- [X] T002 Add `SYSTEM_CMS_MEASURE = f"{PROVENANCE_BASE}/cms-measure"` beside the other `SYSTEM_*` constants (process.py ~line 49) and add `SYSTEM_CMS_MEASURE` to the `OWN_TAG_SYSTEMS` frozenset (process.py ~line 52) so idempotent re-stamp replaces it in place (research R5, contract C-5).
+- [X] T003 Add the `MEASURE_SLUG_BY_CMS = {"CMS2": "depression-screening", "CMS122": "poor-diabetic-control", "CMS165": "controllable-bp"}` crosswalk constant (and a derived inverse map) beside the canonical constants in process.py — the single source of truth for CMS↔slug (FR-010, data-model §3).
 
 **Checkpoint**: Constants exist and import cleanly (`python -c "import process"`); no behavior change yet.
 
@@ -64,11 +64,11 @@ where no tag) even before any resource carries the tag.
 
 ### Tests for User Story 1 ⚠️ (write first, must FAIL before T006)
 
-- [ ] T004 [P] [US1] Extend `tests/test_viewdefinition.py`: assert `select[0].column[]` contains a `cms_measure` column whose `path` references the `…/CodeSystem/cms-measure` system and ends in `.code.first()`, with `type` `code` (contract VC-1, VC-2).
+- [X] T004 [P] [US1] Extend `tests/test_viewdefinition.py`: assert `select[0].column[]` contains a `cms_measure` column whose `path` references the `…/CodeSystem/cms-measure` system and ends in `.code.first()`, with `type` `code` (contract VC-1, VC-2).
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] Append the `cms_measure` column to `viewdefinitions/patient.ViewDefinition.json` `select[0].column[]`: `{ "name": "cms_measure", "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/cms-measure').code.first()", "type": "code" }` — no measure `where` filter, keep the existing provenance `where` (contract viewdefinition-cms-column.md, research R7).
+- [X] T005 [US1] Append the `cms_measure` column to `viewdefinitions/patient.ViewDefinition.json` `select[0].column[]`: `{ "name": "cms_measure", "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/cms-measure').code.first()", "type": "code" }` — no measure `where` filter, keep the existing provenance `where` (contract viewdefinition-cms-column.md, research R7).
 
 **Checkpoint**: T004 passes; the Patient view JSON is valid and carries the column.
 
@@ -85,15 +85,15 @@ contains `{system: …/cms-measure, code: "CMS122"}`; a non-conforming filename 
 
 ### Tests for User Story 2 ⚠️ (write first, must FAIL before T012–T014)
 
-- [ ] T006 [P] [US2] Create `tests/test_cms_measure.py` with derivation cases for `cms_measure_from_filename`: `CMS165_bulk_*.json`→`CMS165`, `CMS2_*.json`→`CMS2`, `CMS122_*.json`→`CMS122`, `cms165_x.json`→`CMS165`, `CMS165.json`→`CMS165`, `CMSX_x.json`→`unknown`, `CMSReport_x.json`→`unknown`, `patient_export.json`→`unknown` (data-model §1, contract C-2).
-- [ ] T007 [US2] Add to `tests/test_cms_measure.py`: `stamp()` adds exactly one cms-measure tag with the derived code; calling `stamp()` twice leaves exactly one (idempotent re-stamp); pre-existing other-system tags and `meta.profile` survive (INV-CMS-2/3, contract C-5/C-6).
-- [ ] T008 [US2] Add to `tests/test_cms_measure.py`: the directory/filename disagreement rule warns only when the filename code is concrete AND the directory slug maps to a different concrete code; filename `unknown` produces no warning (FR-007, data-model §4).
+- [X] T006 [P] [US2] Create `tests/test_cms_measure.py` with derivation cases for `cms_measure_from_filename`: `CMS165_bulk_*.json`→`CMS165`, `CMS2_*.json`→`CMS2`, `CMS122_*.json`→`CMS122`, `cms165_x.json`→`CMS165`, `CMS165.json`→`CMS165`, `CMSX_x.json`→`unknown`, `CMSReport_x.json`→`unknown`, `patient_export.json`→`unknown` (data-model §1, contract C-2).
+- [X] T007 [US2] Add to `tests/test_cms_measure.py`: `stamp()` adds exactly one cms-measure tag with the derived code; calling `stamp()` twice leaves exactly one (idempotent re-stamp); pre-existing other-system tags and `meta.profile` survive (INV-CMS-2/3, contract C-5/C-6).
+- [X] T008 [US2] Add to `tests/test_cms_measure.py`: the directory/filename disagreement rule warns only when the filename code is concrete AND the directory slug maps to a different concrete code; filename `unknown` produces no warning (FR-007, data-model §4).
 
 ### Implementation for User Story 2
 
-- [ ] T009 [US2] Add the pure helper `cms_measure_from_filename(filename: str) -> str` in process.py near `stamp()` (~line 160): match `^CMS\d+` case-insensitively against the basename via stdlib `re`, return uppercased `CMS<digits>` or `"unknown"` (FR-001/006, research R2). Add `import re` if absent.
-- [ ] T010 [US2] In `stamp()` (process.py:164), append a `cms-measure` tag derived from `source_filename` via T009, with `code` = the CMS code and `display` = `MEASURE_SLUG_BY_CMS.get(code, "unknown measure")` (FR-002/003/004/006, contract C-1..C-7). Depends on T002, T003, T009.
-- [ ] T011 [US2] In `discover_inputs()` (process.py:443), log one WARNING per file when the filename code is concrete and the inverse-crosswalk of the directory slug is a different concrete code: `logger.warning("CMS measure mismatch for %s: filename=%s directory=%s (%s); using filename.", ...)` (FR-007/SC-006, data-model §4). Depends on T003, T009.
+- [X] T009 [US2] Add the pure helper `cms_measure_from_filename(filename: str) -> str` in process.py near `stamp()` (~line 160): match `^CMS\d+` case-insensitively against the basename via stdlib `re`, return uppercased `CMS<digits>` or `"unknown"` (FR-001/006, research R2). Add `import re` if absent.
+- [X] T010 [US2] In `stamp()` (process.py:164), append a `cms-measure` tag derived from `source_filename` via T009, with `code` = the CMS code and `display` = `MEASURE_SLUG_BY_CMS.get(code, "unknown measure")` (FR-002/003/004/006, contract C-1..C-7). Depends on T002, T003, T009.
+- [X] T011 [US2] In `discover_inputs()` (process.py:443), log one WARNING per file when the filename code is concrete and the inverse-crosswalk of the directory slug is a different concrete code: `logger.warning("CMS measure mismatch for %s: filename=%s directory=%s (%s); using filename.", ...)` (FR-007/SC-006, data-model §4). Depends on T003, T009.
 
 **Checkpoint**: T006–T008 pass; processing a `CMS122_*` fixture stamps `code: "CMS122"` on each persisted resource; mismatched placement warns.
 
@@ -110,11 +110,11 @@ idempotent stamping (`SYSTEM_CMS_MEASURE` in `OWN_TAG_SYSTEMS`); this phase prov
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T012 [P] [US3] Add a re-attribution test to `tests/test_cms_measure.py`: `stamp()` a resource with an `unknown`-yielding filename, then `stamp()` the same resource dict with a `CMS2_*` filename; assert exactly one cms-measure tag now coded `CMS2` and no duplicate (SC-004, contract C-5). Depends on T010.
+- [X] T012 [P] [US3] Add a re-attribution test to `tests/test_cms_measure.py`: `stamp()` a resource with an `unknown`-yielding filename, then `stamp()` the same resource dict with a `CMS2_*` filename; assert exactly one cms-measure tag now coded `CMS2` and no duplicate (SC-004, contract C-5). Depends on T010.
 
 ### Implementation for User Story 3
 
-- [ ] T013 [US3] Verify end-to-end against a scratch input dir (quickstart §E): copy a `CMS165_*` fixture to `/tmp/export_noprefix.json`, `python process.py --input-dir /tmp` (resources tagged `unknown`), rename to `/tmp/CMS165_reattributed.json`, re-run; confirm same resource ids re-attribute to `CMS165` with no duplicate resource or tag. If a gap surfaces, fix in process.py (otherwise no code change — mechanism delivered by T002/T010).
+- [X] T013 [US3] Verify end-to-end against a scratch input dir (quickstart §E): copy a `CMS165_*` fixture to `/tmp/export_noprefix.json`, `python process.py --input-dir /tmp` (resources tagged `unknown`), rename to `/tmp/CMS165_reattributed.json`, re-run; confirm same resource ids re-attribute to `CMS165` with no duplicate resource or tag. If a gap surfaces, fix in process.py (otherwise no code change — mechanism delivered by T002/T010).
 
 **Checkpoint**: Re-attribution works in place; `unknown` count drops on re-run.
 
@@ -124,9 +124,9 @@ idempotent stamping (`SYSTEM_CMS_MEASURE` in `OWN_TAG_SYSTEMS`); this phase prov
 
 **Purpose**: Documentation, conformance gate, lint, and the cross-story end-to-end measure filter.
 
-- [ ] T014 [P] Update `README.md`: document the `…/CodeSystem/cms-measure` tag system, the `CMS<n>` filename convention, the `unknown` sentinel (with the HL7 DataAbsentReason alternative noted), and the new `patient_view.cms_measure` column (constitution README-as-living-documentation rule).
-- [ ] T015 FHIR conformance gate (Principle III): run `python process.py` over `test/input/`, then `java -jar validator_cli.jar output/**/*.json -version 4.0.1 -ig hl7.fhir.us.ecr#$ECR_IG_VERSION -ig hl7.fhir.us.core#$US_CORE_VERSION -ig hl7.fhir.us.davinci-deqm#$DEQM_VERSION`; confirm zero new errors from the added tag (contract C-6), applying `known-validation-issues.md` filtering.
-- [ ] T016 Run the full unit suite and lint: `python -m unittest discover -s tests -v` and `ruff check .`; confirm green.
+- [X] T014 [P] Update `README.md`: document the `…/CodeSystem/cms-measure` tag system, the `CMS<n>` filename convention, the `unknown` sentinel (with the HL7 DataAbsentReason alternative noted), and the new `patient_view.cms_measure` column (constitution README-as-living-documentation rule).
+- [X] T015 FHIR conformance gate (Principle III): run `python process.py` over `test/input/`, then `java -jar validator_cli.jar output/**/*.json -version 4.0.1 -ig hl7.fhir.us.ecr#$ECR_IG_VERSION -ig hl7.fhir.us.core#$US_CORE_VERSION -ig hl7.fhir.us.davinci-deqm#$DEQM_VERSION`; confirm zero new errors from the added tag (contract C-6), applying `known-validation-issues.md` filtering.
+- [X] T016 Run the full unit suite and lint: `python -m unittest discover -s tests -v` and `ruff check .`; confirm green.
 - [ ] T017 End-to-end measure filter (quickstart §D, against Aidbox): `python process.py` then `python publish_views.py`; query the materialized `patient_view` with `WHERE cms_measure = 'CMS165'` and confirm only CMS165-sourced patients return (and a `_tag` Condition query mirrors it) — SC-001, SC-003.
 
 ---

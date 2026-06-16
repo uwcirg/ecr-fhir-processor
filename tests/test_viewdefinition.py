@@ -54,8 +54,22 @@ class PatientViewDefinitionFileTest(unittest.TestCase):
             "id", "mrn", "name_family", "name_given", "gender", "birth_date",
             "deceased", "race_code", "race_display", "ethnicity_code",
             "ethnicity_display", "address_city", "address_state", "address_postal_code",
+            "cms_measure",
         }
         self.assertEqual(columns, expected)
+
+    def test_cms_measure_column_present_and_wellformed(self):
+        # 003 US1 (contract VC-1/VC-2): a cms_measure column reads the cms-measure tag's
+        # code via the project CMS-measure CodeSystem and reduces to one value per patient.
+        by_name = {c["name"]: c for c in self.view["select"][0]["column"]}
+        self.assertIn("cms_measure", by_name)
+        col = by_name["cms_measure"]
+        self.assertEqual(col["type"], "code")
+        self.assertIn(
+            "https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/cms-measure",
+            col["path"])
+        # VC-2: single-valued reducer, no row-multiplying forEach.
+        self.assertTrue(col["path"].rstrip().endswith(".code.first()"))
 
     def test_no_row_multiplying_foreach(self):
         # One row per Patient: the top-level select must not use forEach (research.md R6).

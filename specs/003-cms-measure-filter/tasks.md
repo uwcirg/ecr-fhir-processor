@@ -127,7 +127,7 @@ idempotent stamping (`SYSTEM_CMS_MEASURE` in `OWN_TAG_SYSTEMS`); this phase prov
 - [X] T014 [P] Update `README.md`: document the `…/CodeSystem/cms-measure` tag system, the `CMS<n>` filename convention, the `unknown` sentinel (with the HL7 DataAbsentReason alternative noted), and the new `patient_view.cms_measure` column (constitution README-as-living-documentation rule).
 - [X] T015 FHIR conformance gate (Principle III): run `python process.py` over `test/input/`, then `java -jar validator_cli.jar output/**/*.json -version 4.0.1 -ig hl7.fhir.us.ecr#$ECR_IG_VERSION -ig hl7.fhir.us.core#$US_CORE_VERSION -ig hl7.fhir.us.davinci-deqm#$DEQM_VERSION`; confirm zero new errors from the added tag (contract C-6), applying `known-validation-issues.md` filtering.
 - [X] T016 Run the full unit suite and lint: `python -m unittest discover -s tests -v` and `ruff check .`; confirm green.
-- [ ] T017 End-to-end measure filter (quickstart §D, against Aidbox): `python process.py` then `python publish_views.py`; query the materialized `patient_view` with `WHERE cms_measure = 'CMS165'` and confirm only CMS165-sourced patients return (and a `_tag` Condition query mirrors it) — SC-001, SC-003.
+- [X] T017 End-to-end measure filter (quickstart §D, against Aidbox): `python process.py` then `python publish_views.py`; query the materialized `patient_view` with `WHERE cms_measure = 'CMS165'` and confirm only CMS165-sourced patients return (and a `_tag` Condition query mirrors it) — SC-001, SC-003.
 
 ---
 

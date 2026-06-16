@@ -29,6 +29,18 @@ The analytics contract for Patient demographics. One file per resource type; Pat
 the demographic columns. **No row-multiplying `forEach`** at the patient level; multi-valued
 elements are reduced with `.first()` (FR + edge case: deterministic single-valued selection).
 
+**Provenance filter (FR-013)**: a top-level `where` whose `path` keeps only Patients persisted
+by this project's processor — those carrying its provenance tag (stamped per feature-001):
+
+```
+meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/processed-by' and code = 'ecr-fhir-processor').exists()
+```
+
+System/code are the feature-001 constants (`SYSTEM_PROCESSED_BY` / `PROCESSOR_IDENTITY`). The
+filter is **version-agnostic** (matches the processor identity, not the `…/processed-on` or
+version tag) so every run's Patients are included while unrelated Patients on the same server
+are excluded.
+
 **Columns** (FR-002 default DoH set; FHIRPath verified against fixture — see research.md R6):
 
 | Column name | FHIRPath `path` | Type | Null when |
@@ -50,6 +62,8 @@ elements are reduced with `.first()` (FR + edge case: deterministic single-value
 
 **Validation rules (FR/Principle)**:
 - Selects only from first-class Patient resources; never reaches into a Bundle (FR-003, VI).
+- Includes only Patients bearing this processor's provenance tag — unrelated Patients on the
+  same server are excluded via the top-level `where` (FR-013).
 - Absent backing field → null column; no fabricated values (FR-010, Principle V).
 - Multi-valued element → deterministic `.first()` (one row per patient).
 - Column set is a **reviewable default**, not a finalized analytics contract (spec Assumptions).

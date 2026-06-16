@@ -24,5 +24,11 @@
         { "name": "address_postal_code", "path": "address.first().postalCode", "type": "string" }
       ]
     }
+  ],
+  "where": [
+    {
+      "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/processed-by' and code = 'ecr-fhir-processor').exists()",
+      "description": "Scope the view to Patients persisted by this project's processor (FR-013): match this processor's provenance tag (processed-by = ecr-fhir-processor), version-agnostic. Excludes unrelated Patient resources on the same server."
+    }
   ]
 }

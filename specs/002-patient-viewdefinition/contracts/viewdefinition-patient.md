@@ -17,6 +17,9 @@ rationale: [../research.md](../research.md) R6.
   The HL7 `validator_cli.jar` does not apply to this resource.
 - MUST select only from first-class `Patient/<id>` resources (FR-003); MUST NOT depend on Bundle
   content (Principle VI).
+- MUST include only Patients persisted by this project's processor — a top-level `where`
+  filters on this processor's provenance tag (`meta.tag` system `…/processed-by`, code
+  `ecr-fhir-processor`); unrelated Patients on the same server are excluded (FR-013).
 - MUST yield exactly one row per Patient: no row-multiplying `forEach`; multi-valued elements
   reduced with `.first()` (deterministic single-valued selection).
 - MUST NOT fabricate values: a missing backing field → null column (FR-010).
@@ -57,9 +60,16 @@ rationale: [../research.md](../research.md) R6.
         { "name": "address_postal_code", "path": "address.first().postalCode",   "type": "string" }
       ]
     }
+  ],
+  "where": [
+    { "path": "meta.tag.where(system = 'http://.../processed-by' and code = 'ecr-fhir-processor').exists()" }
   ]
 }
 ```
+
+> The `where` filter (FR-013) scopes the view to Patients this project persisted, via the
+> feature-001 provenance tag. The real system URL is
+> `https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/processed-by` (abbreviated above).
 
 > The exact FHIRPath dialect details (e.g. `getResourceKey()`, `ofType()`) are settled against
 > Aidbox during the quickstart e2e; the column **names** above are the stable contract.

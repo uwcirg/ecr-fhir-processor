@@ -196,6 +196,33 @@ checked-in ViewDefinition + re-running the step — no mechanism change.
 
 ---
 
+## R7 — Scope the Patient view to this project's persisted resources (FR-013)
+
+**Decision**: Add a top-level `where` to the Patient ViewDefinition that keeps only Patients
+carrying this processor's provenance tag:
+
+```
+meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/processed-by' and code = 'ecr-fhir-processor').exists()
+```
+
+- The target Aidbox can hold Patient resources from other projects/loads. Without a filter the
+  view would absorb them, so `count(*)` would not equal the project's Patient count and the
+  analytics deliverable would silently mix in foreign data.
+- Feature 001 already stamps every persisted resource with this tag (`SYSTEM_PROCESSED_BY` /
+  `PROCESSOR_IDENTITY` in `process.py`), and the README documents `_tag` scoping — so the data
+  to filter on exists by design. This decision wires that existing provenance into the view.
+- **Version-agnostic**: match the processor *identity* (`processed-by` code), not the
+  `…/processed-on` timestamp or the version on the tag, so every run's Patients are included.
+- Surfaced post-implementation when an operator observed unrelated Patients could appear; added
+  as FR-013 and SC-001 retightened (see spec Clarifications 2026-06-15).
+
+**Rationale**: Consistent with the constitution's provenance-stamping intent (Principle VI/
+feature-001) and makes the view's row set deterministic w.r.t. *this* project's data.
+
+**Alternatives considered**: A `Patient?_tag=…` search at publish time then per-id views —
+rejected (defeats the single-view design, not idempotent). Filtering in the analyst's SQL
+instead of the view — rejected: pushes a correctness concern onto every downstream query.
+
 ## Sources
 
 - Aidbox `$materialize` operation — request/response, `type` param, version ≥ 2508, manual

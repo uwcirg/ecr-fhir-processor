@@ -63,6 +63,20 @@ class PatientViewDefinitionFileTest(unittest.TestCase):
             self.assertNotIn("forEach", entry)
             self.assertNotIn("forEachOrNull", entry)
 
+    def test_provenance_where_filter_present(self):
+        # FR-013 / research.md R7: the view must filter to Patients persisted by this
+        # project's processor, via the feature-001 provenance tag.
+        where = self.view.get("where")
+        self.assertIsInstance(where, list)
+        self.assertTrue(where)
+        paths = " ".join(w.get("path", "") for w in where)
+        self.assertIn(
+            "https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/processed-by", paths)
+        self.assertIn("ecr-fhir-processor", paths)
+        self.assertIn("meta.tag", paths)
+        # Version-agnostic: must not pin to processed-on or a version.
+        self.assertNotIn("processed-on", paths)
+
 
 # --------------------------------------------------------------------------- #
 # US2 (T010): ViewDefinition file discovery + per-file isolation (FR-008)

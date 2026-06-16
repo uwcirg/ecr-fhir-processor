@@ -8,6 +8,18 @@
 
 **Input**: User description: "Author an Aidbox SQL-on-FHIR-compliant ViewDefinition for the Patient resource type, plus a script that publishes ViewDefinitions to the target FHIR server (Aidbox base_url) and calls ViewDefinition/[id]/$materialize. Start with Patient only; other resource types await analytics-team column requirements."
 
+## Clarifications
+
+### Session 2026-06-15 (post-implementation)
+
+- **Q**: The target server can hold Patient resources unrelated to this eCR project. Should
+  the Patient view include them, or only Patients this project persisted? — **A**: Only
+  this project's Patients. The view MUST filter on this processor's provenance tag
+  (`meta.tag` system `…/processed-by`, code `ecr-fhir-processor`), so unrelated Patients on
+  the same server are excluded (added as **FR-013**; **SC-001** retightened accordingly).
+  The filter matches the processor identity and is version-agnostic. Consistent with the
+  constitution's provenance-stamping intent and the README's `_tag` scoping recipes.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Analyst queries flattened Patient demographics (Priority: P1)
@@ -105,6 +117,9 @@ publish/materialize step processes both without code changes to the step itself.
   re-persistence of unrelated resources.
 - **Credentials/base URL missing or invalid in configuration**: the step fails loudly at
   startup with a clear message, before contacting the server.
+- **Server also holds unrelated Patient resources** (from other projects/loads): the view
+  excludes them via the processor's provenance tag (FR-013); only Patients this project
+  persisted appear. A Patient that somehow lacks the provenance tag is not in the view.
 
 ## Requirements *(mandatory)*
 
@@ -144,6 +159,12 @@ publish/materialize step processes both without code changes to the step itself.
 - **FR-012**: Scope is limited to Patient for now. Additional resource-type ViewDefinitions
   MUST NOT be authored speculatively; each is added only once the analytics team specifies
   its required columns. The absence of other views is intentional, not incomplete work.
+- **FR-013**: The Patient ViewDefinition MUST include only Patient resources persisted by
+  this project's processor — i.e. those bearing this processor's provenance tag
+  (`meta.tag` system `…/processed-by`, code `ecr-fhir-processor`, stamped per the
+  feature-001 provenance contract). Unrelated Patient resources that happen to exist on the
+  same target server (e.g. from other projects) MUST NOT appear in the view. The filter is
+  version-agnostic (it matches the processor identity, not a specific version).
 
 ### Key Entities *(include if feature involves data)*
 
@@ -160,8 +181,10 @@ publish/materialize step processes both without code changes to the step itself.
 ### Measurable Outcomes
 
 - **SC-001**: After running the publish/materialize step against a server holding N
-  first-class Patient resources, a query against the materialized Patient view returns
-  exactly N rows.
+  first-class Patient resources **persisted by this project's processor** (i.e. carrying
+  its provenance tag, FR-013), a query against the materialized Patient view returns exactly
+  N rows — regardless of how many unrelated Patient resources from other sources also exist
+  on that server.
 - **SC-002**: An analyst can retrieve the defined demographic columns for any patient from
   the materialized view using a single flat query, with no per-resource FHIR navigation.
 - **SC-003**: Running the publish/materialize step twice in a row results in exactly one

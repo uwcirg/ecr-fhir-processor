@@ -102,9 +102,74 @@ python3 process.py --input-dir test/input --skip-types MeasureReport
 python3 process.py --input-dir test/input --only-types MeasureReport
 ```
 
+## Analytics views (`publish_views.py`)
+
+Downstream analytics (e.g. a DoH team) query flattened, one-row-per-resource SQL views
+rather than raw FHIR. Those views are defined by checked-in **SQL-on-FHIR
+`ViewDefinition`** resources under [`viewdefinitions/`](viewdefinitions/) and pushed to
+the target Aidbox server by a separate entry point, `publish_views.py`. It is a rare,
+schema-change activity (run it to *change* a view), so it is its own script — not a
+`process.py` subcommand — sharing the OAuth2 client, config, and logging via
+`fhir_common.py`.
+
+For each `*.json` ViewDefinition it discovers, the step `PUT`s it to
+`{base}/ViewDefinition/{id}` (update-in-place — re-runs never duplicate) and then `POST`s
+`{base}/ViewDefinition/{id}/$materialize`, reporting publish and materialize outcomes
+**separately per view**. Any publish or materialize failure is reflected in a non-zero
+exit; one view's failure never blocks another.
+
+```bash
+python3 publish_views.py [--config config.json]
+                         [--viewdefinitions-dir viewdefinitions]
+                         [--materialize-type view|materialized-view|table]
+                         [--dry-run] [--verbose] [--log-dir log]
+```
+
+- `--materialize-type` — the `$materialize` type. Defaults to `server.materialize_type`
+  in `config.json`, else **`view`** (an always-current SQL view that reflects live data
+  on every read; `materialized-view`/`table` are point-in-time snapshots Aidbox does not
+  auto-refresh).
+- `--dry-run` — discover and validate the ViewDefinition files and report the planned
+  `PUT`/`$materialize` calls **without contacting the server** (no credentials needed).
+
+```bash
+# Verify discovery + config without touching the server:
+python3 publish_views.py --dry-run --verbose
+
+# Publish + materialize every checked-in view (currently just Patient):
+python3 publish_views.py --config config.json --verbose
+```
+
+After a successful run the Patient view is queryable as `sof.patient_view` (one row per
+first-class Patient, default DoH demographic columns; absent source fields are `NULL`,
+never fabricated). It also carries a `cms_measure` column (the resource's CMS-measure tag —
+see [Provenance & search recipes](#provenance--search-recipes)), so an analyst filters the
+flattened view to one measure with a single predicate:
+
+```sql
+SELECT * FROM sof.patient_view WHERE cms_measure = 'CMS165';   -- one measure
+SELECT cms_measure, count(*) FROM sof.patient_view GROUP BY cms_measure;  -- distribution
+```
+
+A Patient persisted before this column existed (not yet re-processed) yields `NULL` here,
+never an error.
+
+**Conformance gate.** A `ViewDefinition` is a SQL-on-FHIR logical-model resource, outside
+the eCR/US-Core IG set, so its conformance gate is **Aidbox acceptance** (`PUT` accepted +
+`$materialize` succeeds) — *not* `validator_cli.jar`. A unit test checks the checked-in
+file is valid JSON with the required fields before any network call.
+
+### Adding another resource type
+
+The mechanism is resource-type-agnostic: drop a new `<type>.ViewDefinition.json` into
+[`viewdefinitions/`](viewdefinitions/) and re-run `publish_views.py` — **no code or
+invocation change**. Only the **Patient** view is authored today; views for other resource
+types are intentionally *not* written speculatively, and will be added once the analytics
+team specifies the columns they need.
+
 ## Provenance & search recipes
 
-Every persisted resource carries three searchable `meta.tag[]` entries plus
+Every persisted resource carries four searchable `meta.tag[]` entries plus
 `meta.source`, under the canonical base
 `https://uwcirg.github.io/ecr-fhir-processor/CodeSystem`:
 
@@ -113,11 +178,33 @@ Every persisted resource carries three searchable `meta.tag[]` entries plus
 | Everything this software wrote | `GET [base]/Patient?_tag=<BASE>/processed-by\|ecr-fhir-processor` |
 | A specific processing run | `GET [base]/Patient?_tag=<BASE>/processed-on\|2026-06-09T14:03:22+00:00` |
 | Everything from one source file | `GET [base]/Patient?_tag=<BASE>/source-file\|CMS165_bulk_dial_high_00042.json` |
+| One CMS quality measure (any resource type) | `GET [base]/Condition?_tag=<BASE>/cms-measure\|CMS165` |
+| The un-attributed bucket | `GET [base]/Condition?_tag=<BASE>/cms-measure\|unknown` |
 
 All resources in a single run share one `processed-on` value, so one `_tag` query
 isolates a run. Re-running identical input updates the same resources in place (no
 duplicates); only the provenance tags and server-managed `meta.lastUpdated`/`versionId`
 change.
+
+### CMS-measure attribution (`cms-measure` tag)
+
+Every persisted resource is tagged with its CMS quality measure under
+`<BASE>/cms-measure`, **derived purely from the input filename**: a name beginning
+`CMS<n>` (case-insensitive — `CMS2`, `CMS122`, `CMS165`, …) yields that uppercased code;
+any other name yields the positive sentinel `unknown`. The parent directory is never
+consulted for the value — if a file's `CMS<n>` prefix disagrees with the measure folder it
+sits in, the processor logs a `WARNING` (naming both) and the **filename wins**; it is
+never silently reconciled. The tag's `display` is the human slug from the authoritative
+crosswalk (`MEASURE_SLUG_BY_CMS` in `process.py`): `CMS2`→`depression-screening`,
+`CMS122`→`poor-diabetic-control`, `CMS165`→`controllable-bp` (`unknown`→`unknown measure`).
+
+The tag is idempotent (exactly one per resource, replaced in place on re-stamp), so the
+production fix for an un-attributed file is simply to **rename it to the `CMS<n>`
+convention and re-run** — the same resources re-attribute from `unknown` to `CMS<n>` with
+no duplicate resource or tag. `unknown` is a positive value in the project-owned system (no
+published `CodeSystem` resource — consistent with the other provisional tag systems), so
+un-attributed resources can be positively listed and counted; the HL7
+`DataAbsentReason`/`unknown` vocabulary is the noted standards-track alternative.
 
 ## Testing & validation (dual gate)
 

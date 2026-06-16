@@ -36,7 +36,7 @@ class ClassifyTest(unittest.TestCase):
 class DiscoveryTest(unittest.TestCase):
     def test_discovers_all_fixtures(self):
         files = process.discover_inputs(str(TEST_INPUT))
-        self.assertEqual(len(files), 13)
+        self.assertEqual(len(files), 18)
 
     def test_measure_and_population_derived(self):
         files = process.discover_inputs(str(TEST_INPUT))

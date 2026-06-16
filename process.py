@@ -12,15 +12,31 @@ from __future__ import annotations
 
 import argparse
 import json
-import logging
+import re
 import subprocess
 import sys
-import urllib.error
-import urllib.parse
-import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Shared primitives — extracted into fhir_common.py so process.py and publish_views.py
+# reuse one FHIR client / config / logging / outcome model (research.md R1). Imported
+# here (rather than redefined) so process.py's behavior is unchanged; the names remain
+# available as process.<name> for the existing test suite.
+from fhir_common import (  # noqa: F401  (re-exported for tests/back-compat)
+    DEFAULT_PATHS,
+    PLACEHOLDER_PREFIX,
+    REQUIRED_SERVER_FIELDS,
+    FhirClient,
+    FileOutcome,
+    RunConfig,
+    RunSummary,
+    SubmissionError,
+    load_config,
+    logger,
+    setup_logging,
+    validate_config,
+)
 
 # --------------------------------------------------------------------------- #
 # Canonical constants (T007; provenance-metadata contract / Principle II)
@@ -32,21 +48,29 @@ PROVENANCE_BASE = "https://uwcirg.github.io/ecr-fhir-processor/CodeSystem"
 SYSTEM_PROCESSED_BY = f"{PROVENANCE_BASE}/processed-by"
 SYSTEM_PROCESSED_ON = f"{PROVENANCE_BASE}/processed-on"
 SYSTEM_SOURCE_FILE = f"{PROVENANCE_BASE}/source-file"
+#: The CMS quality-measure attribution tag system (003; data-model §2, contract C-1).
+SYSTEM_CMS_MEASURE = f"{PROVENANCE_BASE}/cms-measure"
 
 #: The set of meta.tag systems this processor owns (used for idempotent re-stamp).
-OWN_TAG_SYSTEMS = frozenset({SYSTEM_PROCESSED_BY, SYSTEM_PROCESSED_ON, SYSTEM_SOURCE_FILE})
+#: SYSTEM_CMS_MEASURE is included so re-stamp replaces the cms-measure tag in place,
+#: keeping exactly one (INV-CMS-2) and making US3 re-attribution-on-rename safe (R5).
+OWN_TAG_SYSTEMS = frozenset({
+    SYSTEM_PROCESSED_BY, SYSTEM_PROCESSED_ON, SYSTEM_SOURCE_FILE, SYSTEM_CMS_MEASURE,
+})
 
 #: Stable processor identity code stamped into provenance.
 PROCESSOR_IDENTITY = "ecr-fhir-processor"
 
-#: Required, non-empty server fields (rejected if still a YOUR_* placeholder).
-REQUIRED_SERVER_FIELDS = ("base_url", "token_endpoint", "client_id", "client_secret")
-
-#: Prefix marking the example-config placeholders that must be replaced (FR-010).
-PLACEHOLDER_PREFIX = "YOUR_"
-
-#: Default config-relative paths (overridable by config.paths and CLI flags).
-DEFAULT_PATHS = {"input_dir": "input", "output_dir": "output", "log_dir": "log"}
+#: Authoritative CMS-code ↔ measure-slug crosswalk (003 FR-010; data-model §3). The single
+#: source of truth for the cms-measure tag's display and the directory/filename disagreement
+#: check; the constitution Principle-IV measures. The inverse map resolves a directory slug
+#: back to its CMS code for the disagreement signal.
+MEASURE_SLUG_BY_CMS = {
+    "CMS2": "depression-screening",
+    "CMS122": "poor-diabetic-control",
+    "CMS165": "controllable-bp",
+}
+CMS_BY_MEASURE_SLUG = {slug: cms for cms, slug in MEASURE_SLUG_BY_CMS.items()}
 
 #: Input classification kinds.
 KIND_COLLECTION = "collection-bundle"
@@ -57,23 +81,10 @@ KIND_UNKNOWN = "unknown"
 #: Kind aliases accepted by --only-types/--skip-types alongside FHIR resourceTypes (D10).
 KIND_TYPE_ALIASES = {"measure-report": "MeasureReport"}
 
-logger = logging.getLogger("ecr-fhir-processor")
-
 
 # --------------------------------------------------------------------------- #
 # Data structures (data-model.md)
 # --------------------------------------------------------------------------- #
-
-
-@dataclass
-class RunConfig:
-    """Parsed config.json (template config.example.json, reconciled per D7)."""
-
-    software: dict
-    server: dict
-    ig_versions: dict
-    paths: dict
-    raw: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -89,90 +100,8 @@ class InputFile:
         return self.path.name
 
 
-@dataclass
-class FileOutcome:
-    """Per-file result folded into the RunSummary."""
-
-    filename: str
-    kind: str
-    action: str
-    resource_count: int
-    status: str  # succeeded | failed | skipped
-    detail: str = ""
-    resource_type: str | None = None  # FHIR type; derived from `action` for submissions
-
-    def __post_init__(self) -> None:
-        # Submission actions are "PUT <Type>/<id>"; file-level skip/error actions
-        # ("skip", "error") carry no resource type. Derive it once here so the run
-        # summary can stratify resource counts by type (FHIR ids never contain "/").
-        if self.resource_type is None and self.action.startswith("PUT "):
-            self.resource_type = self.action[len("PUT "):].split("/", 1)[0]
-
-
-@dataclass
-class RunSummary:
-    """Aggregate of one execution (FR-014, D8)."""
-
-    read: int = 0
-    submitted: int = 0
-    succeeded: int = 0
-    failed: int = 0
-    skipped: int = 0
-    outcomes: list[FileOutcome] = field(default_factory=list)
-
-    def record(self, outcome: FileOutcome) -> None:
-        self.outcomes.append(outcome)
-
-    @property
-    def exit_code(self) -> int:
-        return 0 if self.failed == 0 else 1
-
-
 class CollisionError(Exception):
     """Two top-level resources share (resourceType, id) but differ in content (FR-019)."""
-
-
-class SubmissionError(Exception):
-    """A FHIR submission returned a non-2xx status (carries the server payload)."""
-
-    def __init__(self, status: int, detail: str):
-        super().__init__(f"HTTP {status}: {detail}")
-        self.status = status
-        self.detail = detail
-
-
-# --------------------------------------------------------------------------- #
-# Logging (T006, D9, FR-013)
-# --------------------------------------------------------------------------- #
-
-
-def setup_logging(log_dir: str, verbose: bool) -> Path:
-    """Configure dual logging: console + timestamped audit file under ``log_dir``.
-
-    ``--verbose`` raises the console handler to DEBUG; the file is always detailed.
-    Returns the path of the log file written.
-    """
-    log_path_dir = Path(log_dir)
-    log_path_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y-%m-%dt%H%M%S")
-    log_file = log_path_dir / f"ecr-fhir-processor_{stamp}.log"
-
-    logger.setLevel(logging.DEBUG)
-    logger.handlers.clear()
-    fmt = logging.Formatter("%(asctime)s %(levelname)-7s %(message)s")
-
-    console = logging.StreamHandler()
-    console.setLevel(logging.DEBUG if verbose else logging.INFO)
-    console.setFormatter(fmt)
-    logger.addHandler(console)
-
-    file_handler = logging.FileHandler(log_file, encoding="utf-8")
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(fmt)
-    logger.addHandler(file_handler)
-
-    logger.debug("Logging to %s", log_file)
-    return log_file
 
 
 # --------------------------------------------------------------------------- #
@@ -215,67 +144,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 # --------------------------------------------------------------------------- #
-# Config (T009 load; T028 validate — US3)
-# --------------------------------------------------------------------------- #
-
-
-def load_config(path: str) -> RunConfig:
-    """Read ``path`` JSON into a RunConfig. Raises FileNotFoundError / ValueError."""
-    config_path = Path(path)
-    if not config_path.exists():
-        raise FileNotFoundError(
-            f"Config file not found: {path}. Copy config.example.json to config.json "
-            f"and fill in server credentials."
-        )
-    with config_path.open(encoding="utf-8") as fh:
-        raw = json.load(fh)
-
-    paths = dict(DEFAULT_PATHS)
-    paths.update(raw.get("paths", {}) or {})
-
-    return RunConfig(
-        software=raw.get("software", {}) or {},
-        server=raw.get("server", {}) or {},
-        ig_versions=raw.get("ig_versions", {}) or {},
-        paths=paths,
-        raw=raw,
-    )
-
-
-def validate_config(config: RunConfig, dry_run: bool) -> list[str]:
-    """Fail-fast validation (FR-010, US3). Returns a list of error messages.
-
-    Required, non-empty ``server.*`` fields; values still equal to their ``YOUR_*``
-    placeholders are rejected. Under ``--dry-run`` server credentials are not required
-    (no token request/submission happens).
-    """
-    errors: list[str] = []
-    if dry_run:
-        return errors  # dry-run never contacts the server (SUB-5)
-
-    server = config.server or {}
-    for fieldname in REQUIRED_SERVER_FIELDS:
-        value = server.get(fieldname)
-        if value is None or (isinstance(value, str) and value.strip() == ""):
-            errors.append(f"Missing required config field: server.{fieldname}")
-        elif isinstance(value, str) and value.startswith(PLACEHOLDER_PREFIX):
-            errors.append(
-                f"Config field server.{fieldname} is still the example placeholder "
-                f"'{value}'. Edit config.json with real values."
-            )
-
-    skip = server.get("validation_skip")
-    if skip is not None and (
-        not isinstance(skip, list) or not all(isinstance(s, str) for s in skip)
-    ):
-        errors.append(
-            'Config field server.validation_skip must be a list of strings '
-            '(e.g. ["reference"]).'
-        )
-    return errors
-
-
-# --------------------------------------------------------------------------- #
 # Version & timestamp (T023, T024 — US2)
 # --------------------------------------------------------------------------- #
 
@@ -311,12 +179,24 @@ def processing_timestamp() -> str:
 # --------------------------------------------------------------------------- #
 
 
+def cms_measure_from_filename(filename: str) -> str:
+    """Derive the CMS quality-measure code purely from the input filename (003 FR-001/006).
+
+    Matches ``^CMS\\d+`` case-insensitively against the bare filename and returns the
+    normalized uppercase ``CMS<digits>`` (e.g. ``cms165_x.json`` -> ``CMS165``). A filename
+    that does not begin with the convention returns the positive sentinel ``"unknown"``.
+    The parent directory is never consulted for the value (single source of truth — R2).
+    """
+    match = re.match(r"CMS(\d+)", Path(filename).name, re.IGNORECASE)
+    return f"CMS{match.group(1)}" if match else "unknown"
+
+
 def stamp(meta: dict | None, version: str, timestamp: str, source_filename: str) -> dict:
     """Additively stamp this processor's provenance onto a resource ``meta``.
 
-    Adds three ``meta.tag[]`` entries (processed-by+version, processed-on, source-file)
-    and ``meta.source``. Idempotent: this processor's own prior tags (matched by
-    ``system``) are replaced, never appended (INV-2). Pre-existing tags from other
+    Adds four ``meta.tag[]`` entries (processed-by+version, processed-on, source-file,
+    cms-measure) and ``meta.source``. Idempotent: this processor's own prior tags (matched
+    by ``system``) are replaced, never appended (INV-2). Pre-existing tags from other
     systems and ``meta.profile`` are preserved (INV-3). Returns the meta dict.
     """
     if meta is None:
@@ -332,6 +212,14 @@ def stamp(meta: dict | None, version: str, timestamp: str, source_filename: str)
     })
     tags.append({"system": SYSTEM_PROCESSED_ON, "code": timestamp})
     tags.append({"system": SYSTEM_SOURCE_FILE, "code": source_filename})
+    # CMS-measure attribution derived from the filename (003; contract C-1..C-7). One tag,
+    # replaced in place on re-stamp (SYSTEM_CMS_MEASURE is in OWN_TAG_SYSTEMS).
+    cms_code = cms_measure_from_filename(source_filename)
+    tags.append({
+        "system": SYSTEM_CMS_MEASURE,
+        "code": cms_code,
+        "display": MEASURE_SLUG_BY_CMS.get(cms_code, "unknown measure"),
+    })
     meta["tag"] = tags
     meta["source"] = f"{SYSTEM_PROCESSED_BY}#{version}"
     return meta
@@ -607,95 +495,17 @@ def discover_inputs(root: str, measure_filter: str | None = None) -> list[InputF
         population = rel[1] if len(rel) >= 3 else None
         if measure_filter and measure != measure_filter:
             continue
+        # Disagreement signal (003 FR-007): warn — never silently reconcile (Principle V) —
+        # when the filename code is concrete AND the directory slug maps to a *different*
+        # concrete code. The filename remains authoritative for the tag regardless.
+        file_code = cms_measure_from_filename(path.name)
+        dir_code = CMS_BY_MEASURE_SLUG.get(measure)
+        if file_code != "unknown" and dir_code is not None and file_code != dir_code:
+            logger.warning(
+                "CMS measure mismatch for %s: filename=%s directory=%s (%s); "
+                "using filename.", path.name, file_code, dir_code, measure)
         found.append(InputFile(path=path, measure=measure, population=population))
     return found
-
-
-# --------------------------------------------------------------------------- #
-# FHIR client / OAuth2 (T014, T016, T019 — US1; fhir-submission contract)
-# --------------------------------------------------------------------------- #
-
-
-class FhirClient:
-    """Minimal OAuth2 client-credentials FHIR client (urllib only, D6)."""
-
-    def __init__(self, server: dict):
-        self.server = server
-        self.base = (server.get("base_url") or "").rstrip("/")
-        self.token: str | None = None
-        # Optional Aidbox validation relaxation (config server.validation_skip, e.g.
-        # ["reference"]). When set, every submission carries the `aidbox-validation-skip`
-        # header so Aidbox bypasses the named validation pass(es). See
-        # known-validation-issues.md "Aidbox ingestion-time validation". Empty/absent =
-        # no header = full validation (default).
-        self.validation_skip: list[str] = list(server.get("validation_skip") or [])
-        if self.validation_skip:
-            logger.info(
-                "Aidbox validation relaxation active: aidbox-validation-skip: %s",
-                ",".join(self.validation_skip),
-            )
-
-    def _fetch_token(self) -> str:
-        data = urllib.parse.urlencode({
-            "grant_type": "client_credentials",
-            "client_id": self.server.get("client_id", ""),
-            "client_secret": self.server.get("client_secret", ""),
-        }).encode("utf-8")
-        req = urllib.request.Request(
-            self.server["token_endpoint"], data=data,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req) as resp:  # noqa: S310 (config-controlled URL)
-            payload = json.loads(resp.read().decode("utf-8"))
-        token = payload.get("access_token")
-        if not token:
-            raise SubmissionError(0, "Token endpoint returned no access_token.")
-        logger.debug("Obtained bearer token (cached for this run).")
-        return token
-
-    def _ensure_token(self) -> None:
-        if self.token is None:
-            self.token = self._fetch_token()
-
-    def request(self, method: str, url: str, body: dict | None = None) -> tuple[int, dict]:
-        """Issue a FHIR request, refreshing the token once on 401 (D6, SUB-3)."""
-        self._ensure_token()
-        encoded = json.dumps(body).encode("utf-8") if body is not None else None
-        for attempt in range(2):
-            headers = {
-                "Authorization": f"Bearer {self.token}",
-                "Accept": "application/fhir+json",
-                "Content-Type": "application/fhir+json",
-            }
-            if self.validation_skip:
-                headers["aidbox-validation-skip"] = ",".join(self.validation_skip)
-            req = urllib.request.Request(
-                url, data=encoded, method=method, headers=headers,
-            )
-            try:
-                with urllib.request.urlopen(req) as resp:  # noqa: S310
-                    raw = resp.read().decode("utf-8")
-                    parsed = json.loads(raw) if raw else {}
-                    return resp.status, parsed
-            except urllib.error.HTTPError as exc:
-                raw = exc.read().decode("utf-8", errors="replace")
-                if exc.code == 401 and attempt == 0:
-                    logger.debug("401 received; refreshing token and retrying once.")
-                    self.token = self._fetch_token()
-                    continue
-                try:
-                    parsed = json.loads(raw) if raw else {}
-                except json.JSONDecodeError:
-                    parsed = {"raw": raw}
-                raise SubmissionError(exc.code, json.dumps(parsed)) from exc
-            except urllib.error.URLError as exc:
-                raise SubmissionError(0, f"Network error reaching {url}: {exc.reason}") from exc
-        raise SubmissionError(401, "Authentication failed after token refresh.")
-
-    def submit_put(self, resource_type: str, resource_id: str, resource: dict) -> tuple[int, dict]:
-        """Persist a single resource via update-in-place ``PUT`` by id (D2, SUB-1)."""
-        return self.request("PUT", f"{self.base}/{resource_type}/{resource_id}", body=resource)
 
 
 # --------------------------------------------------------------------------- #

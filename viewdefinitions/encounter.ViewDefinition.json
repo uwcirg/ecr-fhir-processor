@@ -1,0 +1,31 @@
+{
+  "resourceType": "ViewDefinition",
+  "id": "encounter",
+  "name": "encounter_view",
+  "status": "active",
+  "resource": "Encounter",
+  "description": "Flattened analytics view: one row per first-class Encounter persisted by this project. Default column set is an informed, reviewable default (FR-002), not a finalized analytics-team contract.",
+  "select": [
+    {
+      "column": [
+        { "name": "id", "path": "getResourceKey()", "type": "string" },
+        { "name": "status", "path": "status", "type": "code" },
+        { "name": "class", "path": "class.code", "type": "code" },
+        { "name": "type", "path": "type.first().coding.first().code", "type": "code" },
+        { "name": "type_display", "path": "type.first().coding.first().display", "type": "string" },
+        { "name": "subject", "path": "subject.reference", "type": "string" },
+        { "name": "period_start", "path": "period.start", "type": "dateTime" },
+        { "name": "period_end", "path": "period.end", "type": "dateTime" },
+        { "name": "service_provider", "path": "serviceProvider.reference", "type": "string" },
+        { "name": "location", "path": "location.first().location.reference", "type": "string" },
+        { "name": "cms_measure", "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/cms-measure').code.first()", "type": "code" }
+      ]
+    }
+  ],
+  "where": [
+    {
+      "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/processed-by' and code = 'ecr-fhir-processor').exists()",
+      "description": "Scope the view to Encounters persisted by this project's processor (FR-005): match this processor's provenance tag (processed-by = ecr-fhir-processor), version-agnostic. Excludes unrelated Encounter resources on the same server."
+    }
+  ]
+}

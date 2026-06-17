@@ -1,0 +1,28 @@
+{
+  "resourceType": "ViewDefinition",
+  "id": "practitioner",
+  "name": "practitioner_view",
+  "status": "active",
+  "resource": "Practitioner",
+  "description": "Flattened analytics view: one row per first-class Practitioner persisted by this project. Default column set is an informed, reviewable default (FR-002), not a finalized analytics-team contract.",
+  "select": [
+    {
+      "column": [
+        { "name": "id", "path": "getResourceKey()", "type": "string" },
+        { "name": "npi", "path": "identifier.where(system = 'http://hl7.org/fhir/sid/us-npi').value.first()", "type": "string" },
+        { "name": "identifier", "path": "identifier.first().value", "type": "string" },
+        { "name": "name_family", "path": "name.first().family", "type": "string" },
+        { "name": "name_given", "path": "name.first().given.first()", "type": "string" },
+        { "name": "gender", "path": "gender", "type": "code" },
+        { "name": "active", "path": "active", "type": "boolean" },
+        { "name": "cms_measure", "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/cms-measure').code.first()", "type": "code" }
+      ]
+    }
+  ],
+  "where": [
+    {
+      "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/processed-by' and code = 'ecr-fhir-processor').exists()",
+      "description": "Scope the view to Practitioners persisted by this project's processor (FR-005): match this processor's provenance tag (processed-by = ecr-fhir-processor), version-agnostic. Excludes unrelated Practitioner resources on the same server."
+    }
+  ]
+}

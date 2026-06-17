@@ -33,7 +33,7 @@ quickstart), not `validator_cli.jar` (research.md R5).
 
 **Purpose**: Confirm the existing auto-discovery + shared file shape so the eleven new files drop in unchanged.
 
-- [ ] T001 Confirm auto-discovery and the shared file shape baseline: read `discover_viewdefinitions()` in `publish_views.py` and the existing `viewdefinitions/patient.ViewDefinition.json` to verify every `viewdefinitions/*.json` is globbed and that no code change is required (research.md R1). Record nothing to change; this is a read-only baseline check.
+- [X] T001 Confirm auto-discovery and the shared file shape baseline: read `discover_viewdefinitions()` in `publish_views.py` and the existing `viewdefinitions/patient.ViewDefinition.json` to verify every `viewdefinitions/*.json` is globbed and that no code change is required (research.md R1). Record nothing to change; this is a read-only baseline check.
 
 ---
 
@@ -43,7 +43,7 @@ quickstart), not `validator_cli.jar` (research.md R5).
 
 **⚠️ CRITICAL**: Establishes the universal columns + provenance `where` reused by all of Phase 3.
 
-- [ ] T002 Establish the shared ViewDefinition skeleton convention used by all eleven files, per data-model.md §0 and `contracts/viewdefinitions-remaining.md`: the universal `id` column (`getResourceKey()`, type `string`), the `cms_measure` column (`meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/cms-measure').code.first()`, type `code`), and the top-level provenance `where` (`meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/processed-by' and code = 'ecr-fhir-processor').exists()`). Capture this skeleton (matching `viewdefinitions/patient.ViewDefinition.json`) as the copy/paste basis for T003–T013.
+- [X] T002 Establish the shared ViewDefinition skeleton convention used by all eleven files, per data-model.md §0 and `contracts/viewdefinitions-remaining.md`: the universal `id` column (`getResourceKey()`, type `string`), the `cms_measure` column (`meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/cms-measure').code.first()`, type `code`), and the top-level provenance `where` (`meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/processed-by' and code = 'ecr-fhir-processor').exists()`). Capture this skeleton (matching `viewdefinitions/patient.ViewDefinition.json`) as the copy/paste basis for T003–T013.
 
 **Checkpoint**: Shared skeleton confirmed — the eleven author tasks can proceed in parallel.
 
@@ -64,19 +64,19 @@ populated (null where the source field is absent) — quickstart §3.
 > Each task authors ONE complete, conformant file from the T002 skeleton + that type's column→FHIRPath
 > table in data-model.md. All eleven are different files ⇒ fully parallel.
 
-- [ ] T003 [P] [US1] Author `viewdefinitions/condition.ViewDefinition.json` (id `condition`, name `condition_view`, resource `Condition`) with columns per data-model.md §1 (clinical_status, verification_status, category, code, code_system, code_display, subject, encounter, onset_date_time, recorded_date) + universal id/cms_measure + provenance `where`.
-- [ ] T004 [P] [US1] Author `viewdefinitions/encounter.ViewDefinition.json` (id `encounter`, name `encounter_view`, resource `Encounter`) with columns per data-model.md §2 (status, class, type, type_display, subject, period_start, period_end, service_provider, location) + universal columns + provenance `where`.
-- [ ] T005 [P] [US1] Author `viewdefinitions/observation.ViewDefinition.json` (id `observation`, name `observation_view`, resource `Observation`) with columns per data-model.md §3 (status, category, code, code_system, code_display, value_quantity, value_unit, value_code, value_string, effective_date_time, subject, encounter) + universal columns + provenance `where`.
-- [ ] T006 [P] [US1] Author `viewdefinitions/practitioner.ViewDefinition.json` (id `practitioner`, name `practitioner_view`, resource `Practitioner`) with columns per data-model.md §4 (npi, identifier, name_family, name_given, gender, active) + universal columns + provenance `where`.
-- [ ] T007 [P] [US1] Author `viewdefinitions/organization.ViewDefinition.json` (id `organization`, name `organization_view`, resource `Organization`) with columns per data-model.md §5 (identifier, name, type, active, address_city, address_state, address_postal_code) + universal columns + provenance `where`.
-- [ ] T008 [P] [US1] Author `viewdefinitions/location.ViewDefinition.json` (id `location`, name `location_view`, resource `Location`) with columns per data-model.md §6 (identifier, name, status, type, address_city, address_state, address_postal_code, managing_organization) + universal columns + provenance `where`.
-- [ ] T009 [P] [US1] Author `viewdefinitions/measure.ViewDefinition.json` (id `measure`, name `measure_view`, resource `Measure`) with columns per data-model.md §7 (url, version, name, title, status, scoring, identifier) + universal columns + provenance `where`. Add a `description` noting it is empty-until-loaded (zero rows until Measure resources exist; research.md R5).
-- [ ] T010 [P] [US1] Author `viewdefinitions/bundle.ViewDefinition.json` (id `bundle`, name `bundle_view`, resource `Bundle`) — metadata-only per data-model.md §8 / FR-011 (type, timestamp, identifier, entry_count via `entry.count()`); NO nested-entry flattening + universal columns + provenance `where`.
-- [ ] T011 [P] [US1] Author `viewdefinitions/procedure.ViewDefinition.json` (id `procedure`, name `procedure_view`, resource `Procedure`) with columns per data-model.md §9 (status, category, code, code_display, subject, encounter, performed_date_time) + universal columns + provenance `where`.
-- [ ] T012 [P] [US1] Author `viewdefinitions/medicationrequest.ViewDefinition.json` (id `medicationrequest`, name `medicationrequest_view`, resource `MedicationRequest`) with columns per data-model.md §10 (status, intent, medication_code, medication_display, medication_reference, subject, encounter, authored_on, requester) + universal columns + provenance `where`.
-- [ ] T013 [P] [US1] Author `viewdefinitions/servicerequest.ViewDefinition.json` (id `servicerequest`, name `servicerequest_view`, resource `ServiceRequest`) with columns per data-model.md §11 (status, intent, category, code, code_display, subject, encounter, authored_on, requester) + universal columns + provenance `where`.
-- [ ] T014 [US1] Extend `tests/test_viewdefinition.py` with a directory-driven shape suite over every `viewdefinitions/*.json` (research.md R8): assert valid JSON; required fields `resourceType == "ViewDefinition"`, `id`, `name`, `status`, `resource`, non-empty `select`; an `id` column using `getResourceKey()`; and no row-multiplying `forEach` in `select`. Keep the existing Patient-specific assertions. (Provenance/cms_measure assertions are added by US3 / T021.)
-- [ ] T015 [US1] Run `python -m unittest tests/test_viewdefinition.py` and confirm the generic shape suite passes for all twelve files (the eleven new + Patient).
+- [X] T003 [P] [US1] Author `viewdefinitions/condition.ViewDefinition.json` (id `condition`, name `condition_view`, resource `Condition`) with columns per data-model.md §1 (clinical_status, verification_status, category, code, code_system, code_display, subject, encounter, onset_date_time, recorded_date) + universal id/cms_measure + provenance `where`.
+- [X] T004 [P] [US1] Author `viewdefinitions/encounter.ViewDefinition.json` (id `encounter`, name `encounter_view`, resource `Encounter`) with columns per data-model.md §2 (status, class, type, type_display, subject, period_start, period_end, service_provider, location) + universal columns + provenance `where`.
+- [X] T005 [P] [US1] Author `viewdefinitions/observation.ViewDefinition.json` (id `observation`, name `observation_view`, resource `Observation`) with columns per data-model.md §3 (status, category, code, code_system, code_display, value_quantity, value_unit, value_code, value_string, effective_date_time, subject, encounter) + universal columns + provenance `where`.
+- [X] T006 [P] [US1] Author `viewdefinitions/practitioner.ViewDefinition.json` (id `practitioner`, name `practitioner_view`, resource `Practitioner`) with columns per data-model.md §4 (npi, identifier, name_family, name_given, gender, active) + universal columns + provenance `where`.
+- [X] T007 [P] [US1] Author `viewdefinitions/organization.ViewDefinition.json` (id `organization`, name `organization_view`, resource `Organization`) with columns per data-model.md §5 (identifier, name, type, active, address_city, address_state, address_postal_code) + universal columns + provenance `where`.
+- [X] T008 [P] [US1] Author `viewdefinitions/location.ViewDefinition.json` (id `location`, name `location_view`, resource `Location`) with columns per data-model.md §6 (identifier, name, status, type, address_city, address_state, address_postal_code, managing_organization) + universal columns + provenance `where`.
+- [X] T009 [P] [US1] Author `viewdefinitions/measure.ViewDefinition.json` (id `measure`, name `measure_view`, resource `Measure`) with columns per data-model.md §7 (url, version, name, title, status, scoring, identifier) + universal columns + provenance `where`. Add a `description` noting it is empty-until-loaded (zero rows until Measure resources exist; research.md R5).
+- [X] T010 [P] [US1] Author `viewdefinitions/bundle.ViewDefinition.json` (id `bundle`, name `bundle_view`, resource `Bundle`) — metadata-only per data-model.md §8 / FR-011 (type, timestamp, identifier, entry_count via `entry.count()`); NO nested-entry flattening + universal columns + provenance `where`.
+- [X] T011 [P] [US1] Author `viewdefinitions/procedure.ViewDefinition.json` (id `procedure`, name `procedure_view`, resource `Procedure`) with columns per data-model.md §9 (status, category, code, code_display, subject, encounter, performed_date_time) + universal columns + provenance `where`.
+- [X] T012 [P] [US1] Author `viewdefinitions/medicationrequest.ViewDefinition.json` (id `medicationrequest`, name `medicationrequest_view`, resource `MedicationRequest`) with columns per data-model.md §10 (status, intent, medication_code, medication_display, medication_reference, subject, encounter, authored_on, requester) + universal columns + provenance `where`.
+- [X] T013 [P] [US1] Author `viewdefinitions/servicerequest.ViewDefinition.json` (id `servicerequest`, name `servicerequest_view`, resource `ServiceRequest`) with columns per data-model.md §11 (status, intent, category, code, code_display, subject, encounter, authored_on, requester) + universal columns + provenance `where`.
+- [X] T014 [US1] Extend `tests/test_viewdefinition.py` with a directory-driven shape suite over every `viewdefinitions/*.json` (research.md R8): assert valid JSON; required fields `resourceType == "ViewDefinition"`, `id`, `name`, `status`, `resource`, non-empty `select`; an `id` column using `getResourceKey()`; and no row-multiplying `forEach` in `select`. Keep the existing Patient-specific assertions. (Provenance/cms_measure assertions are added by US3 / T021.)
+- [X] T015 [US1] Run `python -m unittest tests/test_viewdefinition.py` and confirm the generic shape suite passes for all twelve files (the eleven new + Patient).
 - [ ] T016 [US1] E2E (quickstart §3): with the views published+materialized, query each new `sof.<type>_view` and confirm one row per persisted resource of that type with columns populated from the source (null where absent, never fabricated — SC-003/SC-004). Spot-check the worked examples (Condition `code=44054006`; Observation `value_quantity=9.2`, `value_unit=%`).
 
 **Checkpoint**: Eleven conformant view files exist and pass shape assertions; once published they return correct flat rows. MVP deliverable complete.
@@ -95,7 +95,7 @@ with a per-view roll-up and exit 0; re-run yields no duplicates; one bad view fa
 
 > No new files — exercises the existing mechanism against the Phase 3 view files. T017→T018→T019 are sequential (same server state); T020 is independent.
 
-- [ ] T017 [US2] Dry-run discovery (quickstart §1): run `python publish_views.py --dry-run --verbose` and confirm all twelve ViewDefinition files are discovered, each planned as `PUT …/ViewDefinition/<id>` + `POST …/$materialize`, with no server contact.
+- [X] T017 [US2] Dry-run discovery (quickstart §1): run `python publish_views.py --dry-run --verbose` and confirm all twelve ViewDefinition files are discovered, each planned as `PUT …/ViewDefinition/<id>` + `POST …/$materialize`, with no server contact.
 - [ ] T018 [US2] Publish + materialize (quickstart §2 / FR-004, SC-001, SC-006): run `python publish_views.py --config config.json --verbose` and confirm a per-view block for each of the twelve and a roll-up `12 published, 12 materialized, 0 failed`, exit status 0, with the same invocation as the Patient-only run.
 - [ ] T019 [US2] Idempotent re-run (quickstart §8 / FR-009, SC-006): re-run `python publish_views.py --config config.json` and confirm success again with exactly one of each `ViewDefinition/<id>` and `sof.<type>_view` (no duplicates).
 - [ ] T020 [US2] Failure isolation (quickstart §9 / FR-010, SC-007): point `--viewdefinitions-dir` at a copy where one view has a deliberately non-conformant column, run, and confirm the server's reason is logged, that one view is reported failed (publish vs materialize distinguished), the run exits non-zero, and every other view is still published and materialized.
@@ -117,7 +117,7 @@ measure's resources are returned.
 
 > T021 edits the same test file as T014 — sequence it after T014 (not parallel). T022/T023 are e2e checks.
 
-- [ ] T021 [US3] Extend the directory-driven suite in `tests/test_viewdefinition.py` to assert, for every `viewdefinitions/*.json`: the top-level provenance `where` filter (`…/processed-by` = `ecr-fhir-processor`) is present, and a single-valued `cms_measure` column reading `…/cms-measure` exists (research.md R8 / FR-005, FR-006). Re-run `python -m unittest tests/test_viewdefinition.py` to confirm all twelve pass.
+- [X] T021 [US3] Extend the directory-driven suite in `tests/test_viewdefinition.py` to assert, for every `viewdefinitions/*.json`: the top-level provenance `where` filter (`…/processed-by` = `ecr-fhir-processor`) is present, and a single-valued `cms_measure` column reading `…/cms-measure` exists (research.md R8 / FR-005, FR-006). Re-run `python -m unittest tests/test_viewdefinition.py` to confirm all twelve pass.
 - [ ] T022 [US3] E2E provenance scoping (quickstart §3 / SC-002): on a server also holding unrelated resources of these types, query each new view and confirm only processor-persisted rows (those bearing the `…/processed-by` tag) appear and zero unrelated rows.
 - [ ] T023 [US3] E2E measure scoping (quickstart §4 / SC-005): filter each new view on `cms_measure` (e.g. `WHERE cms_measure = 'CMS122'`) and confirm only that measure's rows return, and that `SELECT DISTINCT cms_measure` yields known codes (e.g. CMS2/CMS122/CMS165) or the `unknown` sentinel.
 
@@ -129,10 +129,10 @@ measure's resources are returned.
 
 **Purpose**: Documentation, edge-case validation, and lint.
 
-- [ ] T024 [P] Update `README.md` "What it does" to note the materialized views now span twelve resource types (Patient + the eleven new), per plan.md Project Structure.
+- [X] T024 [P] Update `README.md` "What it does" to note the materialized views now span twelve resource types (Patient + the eleven new), per plan.md Project Structure.
 - [ ] T025 Validate the two special-case views e2e: `sof.measure_view` materialized but returns zero rows (quickstart §6, research.md R5 — success not failure), and `sof.bundle_view` returns container metadata only with no nested clinical columns (quickstart §7, FR-011).
 - [ ] T026 Run the full quickstart.md e2e end-to-end, including the cross-view join (quickstart §5) to confirm views join on their reference columns (`subject`, `encounter`) within this project's data.
-- [ ] T027 [P] Run `ruff` lint and confirm clean — no production code was changed by this feature (Principle I).
+- [X] T027 [P] Run `ruff` lint and confirm clean — no production code was changed by this feature (Principle I).
 
 ---
 

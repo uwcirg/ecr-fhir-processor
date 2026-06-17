@@ -105,8 +105,11 @@ python3 process.py --input-dir test/input --only-types MeasureReport
 ## Analytics views (`publish_views.py`)
 
 Downstream analytics (e.g. a DoH team) query flattened, one-row-per-resource SQL views
-rather than raw FHIR. Those views are defined by checked-in **SQL-on-FHIR
-`ViewDefinition`** resources under [`viewdefinitions/`](viewdefinitions/) and pushed to
+rather than raw FHIR. The materialized views now span **twelve resource types** — Patient
+plus Condition, Encounter, Observation, Practitioner, Organization, Location, Measure,
+Bundle, Procedure, MedicationRequest, and ServiceRequest. Those views are defined by
+checked-in **SQL-on-FHIR `ViewDefinition`** resources under
+[`viewdefinitions/`](viewdefinitions/) and pushed to
 the target Aidbox server by a separate entry point, `publish_views.py`. It is a rare,
 schema-change activity (run it to *change* a view), so it is its own script — not a
 `process.py` subcommand — sharing the OAuth2 client, config, and logging via
@@ -136,7 +139,7 @@ python3 publish_views.py [--config config.json]
 # Verify discovery + config without touching the server:
 python3 publish_views.py --dry-run --verbose
 
-# Publish + materialize every checked-in view (currently just Patient):
+# Publish + materialize every checked-in view (twelve resource types):
 python3 publish_views.py --config config.json --verbose
 ```
 
@@ -163,9 +166,13 @@ file is valid JSON with the required fields before any network call.
 
 The mechanism is resource-type-agnostic: drop a new `<type>.ViewDefinition.json` into
 [`viewdefinitions/`](viewdefinitions/) and re-run `publish_views.py` — **no code or
-invocation change**. Only the **Patient** view is authored today; views for other resource
-types are intentionally *not* written speculatively, and will be added once the analytics
-team specifies the columns they need.
+invocation change**. Twelve views are authored today (Patient plus the eleven listed
+above), each with the same provenance scoping and `cms_measure` column as Patient. Two are
+special cases: `sof.measure_view` materializes but returns **zero rows** until `Measure`
+resources are loaded (this project's fixtures only *reference* APHL Measure canonicals), and
+`sof.bundle_view` exposes container metadata only — its nested clinical content is promoted
+to the other first-class views, not flattened here. Each view's column set is an informed,
+reviewable default, refined as the analytics team specifies the columns they need.
 
 ## Provenance & search recipes
 

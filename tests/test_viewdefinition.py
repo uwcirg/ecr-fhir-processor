@@ -17,7 +17,16 @@ from pathlib import Path
 import publish_views
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PATIENT_VIEW = REPO_ROOT / "viewdefinitions" / "patient.ViewDefinition.json"
+VIEWDEFINITIONS_DIR = REPO_ROOT / "viewdefinitions"
+PATIENT_VIEW = VIEWDEFINITIONS_DIR / "patient.ViewDefinition.json"
+
+PROVENANCE_SYSTEM = "https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/processed-by"
+CMS_MEASURE_SYSTEM = "https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/cms-measure"
+
+
+def _all_view_files():
+    """Every checked-in ViewDefinition file (sorted for stable subtest labels)."""
+    return sorted(VIEWDEFINITIONS_DIR.glob("*.json"))
 
 
 # --------------------------------------------------------------------------- #
@@ -225,6 +234,116 @@ class GeneralizationTest(unittest.TestCase):
             units, failures = publish_views.discover_viewdefinitions(d)
             self.assertEqual(sorted(u.view_id for u in units), ["encounter", "patient"])
             self.assertEqual(failures, [])
+
+
+# --------------------------------------------------------------------------- #
+# US1 (T014): generic, directory-driven shape suite over EVERY view file
+# --------------------------------------------------------------------------- #
+
+
+class AllViewDefinitionsShapeTest(unittest.TestCase):
+    """Shape assertions applied to every viewdefinitions/*.json (research.md R8).
+
+    Driven generically over the directory so a newly added view file is covered
+    with no new test. Covers the eleven new views (004) plus Patient (002/003).
+    """
+
+    def setUp(self):
+        self.files = _all_view_files()
+
+    def test_directory_has_view_files(self):
+        # Guard: the glob must actually find the checked-in views.
+        self.assertTrue(self.files, "no ViewDefinition files discovered")
+
+    def test_every_file_parses_as_json(self):
+        for path in self.files:
+            with self.subTest(view=path.name):
+                with path.open(encoding="utf-8") as fh:
+                    view = json.load(fh)
+                self.assertIsInstance(view, dict)
+
+    def test_every_file_has_required_fields(self):
+        for path in self.files:
+            with self.subTest(view=path.name):
+                with path.open(encoding="utf-8") as fh:
+                    view = json.load(fh)
+                self.assertEqual(view.get("resourceType"), "ViewDefinition")
+                self.assertTrue(view.get("id"))
+                self.assertTrue(view.get("name"))
+                self.assertIn(view.get("status"), {"active", "draft"})
+                self.assertTrue(view.get("resource"))
+
+    def test_every_file_has_non_empty_select_columns(self):
+        for path in self.files:
+            with self.subTest(view=path.name):
+                with path.open(encoding="utf-8") as fh:
+                    view = json.load(fh)
+                select = view.get("select")
+                self.assertIsInstance(select, list)
+                self.assertTrue(select)
+                columns = select[0].get("column")
+                self.assertIsInstance(columns, list)
+                self.assertTrue(columns)
+
+    def test_every_file_has_resource_key_id_column(self):
+        for path in self.files:
+            with self.subTest(view=path.name):
+                with path.open(encoding="utf-8") as fh:
+                    view = json.load(fh)
+                by_name = {c["name"]: c for c in view["select"][0]["column"]}
+                self.assertIn("id", by_name)
+                self.assertEqual(by_name["id"]["path"], "getResourceKey()")
+
+    def test_no_row_multiplying_foreach(self):
+        # One row per resource: no forEach / forEachOrNull anywhere in select (research.md R3).
+        for path in self.files:
+            with self.subTest(view=path.name):
+                with path.open(encoding="utf-8") as fh:
+                    view = json.load(fh)
+                for entry in view["select"]:
+                    self.assertNotIn("forEach", entry)
+                    self.assertNotIn("forEachOrNull", entry)
+
+
+# --------------------------------------------------------------------------- #
+# US3 (T021): provenance + cms_measure scoping uniform across EVERY view file
+# --------------------------------------------------------------------------- #
+
+
+class AllViewDefinitionsScopingTest(unittest.TestCase):
+    """FR-005/FR-006: every view scopes to processor-persisted resources and exposes
+    a single-valued cms_measure column — the same scoping the Patient view has."""
+
+    def setUp(self):
+        self.files = _all_view_files()
+
+    def test_every_file_has_provenance_where_filter(self):
+        for path in self.files:
+            with self.subTest(view=path.name):
+                with path.open(encoding="utf-8") as fh:
+                    view = json.load(fh)
+                where = view.get("where")
+                self.assertIsInstance(where, list)
+                self.assertTrue(where)
+                paths = " ".join(w.get("path", "") for w in where)
+                self.assertIn(PROVENANCE_SYSTEM, paths)
+                self.assertIn("ecr-fhir-processor", paths)
+                self.assertIn("meta.tag", paths)
+                # Version-agnostic: must not pin to processed-on or a version.
+                self.assertNotIn("processed-on", paths)
+
+    def test_every_file_has_single_valued_cms_measure_column(self):
+        for path in self.files:
+            with self.subTest(view=path.name):
+                with path.open(encoding="utf-8") as fh:
+                    view = json.load(fh)
+                by_name = {c["name"]: c for c in view["select"][0]["column"]}
+                self.assertIn("cms_measure", by_name)
+                col = by_name["cms_measure"]
+                self.assertEqual(col["type"], "code")
+                self.assertIn(CMS_MEASURE_SYSTEM, col["path"])
+                # Single-valued reducer, no row-multiplying forEach.
+                self.assertTrue(col["path"].rstrip().endswith(".code.first()"))
 
 
 if __name__ == "__main__":

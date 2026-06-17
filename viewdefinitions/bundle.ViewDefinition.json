@@ -1,0 +1,26 @@
+{
+  "resourceType": "ViewDefinition",
+  "id": "bundle",
+  "name": "bundle_view",
+  "status": "active",
+  "resource": "Bundle",
+  "description": "Container-level metadata view: one row per first-class Bundle persisted by this project. Metadata-only (FR-011) — nested clinical content is NOT flattened here; it is promoted to first-class resources covered by the other views (Principle VI). Default column set is an informed, reviewable default (FR-002), not a finalized analytics-team contract.",
+  "select": [
+    {
+      "column": [
+        { "name": "id", "path": "getResourceKey()", "type": "string" },
+        { "name": "type", "path": "type", "type": "code" },
+        { "name": "timestamp", "path": "timestamp", "type": "instant" },
+        { "name": "identifier", "path": "identifier.value", "type": "string" },
+        { "name": "entry_count", "path": "entry.count()", "type": "integer" },
+        { "name": "cms_measure", "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/cms-measure').code.first()", "type": "code" }
+      ]
+    }
+  ],
+  "where": [
+    {
+      "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/processed-by' and code = 'ecr-fhir-processor').exists()",
+      "description": "Scope the view to Bundles persisted by this project's processor (FR-005): match this processor's provenance tag (processed-by = ecr-fhir-processor), version-agnostic. Excludes unrelated Bundle resources on the same server."
+    }
+  ]
+}

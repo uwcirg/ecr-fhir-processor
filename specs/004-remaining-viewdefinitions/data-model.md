@@ -153,10 +153,17 @@ string, not the resolved target (R4).
 | `type` | `type` | code |
 | `timestamp` | `timestamp` | instant |
 | `identifier` | `identifier.value` | string |
-| `entry_count` | `entry.count()` | integer |
 
 > Container-level metadata only. Nested clinical content is **not** flattened here — it is promoted
 > to first-class resources covered by the other views (Principle VI).
+>
+> **Dropped `entry_count` (`entry.count()`) — conformance gate.** Initially specified, this column
+> was removed after the authoritative gate (Aidbox `$materialize`) rejected it: the target engine
+> does not implement the FHIRPath `count()` aggregate in column expressions (`HTTP 500: No method in
+> multimethod 'geval' for dispatch value: count`). Per research.md R5 / Principle III, server
+> acceptance is authoritative, and there is no `count()`-free FHIRPath cardinality alternative, so the
+> column is omitted rather than failing materialization of the whole view. Entry-level data is already
+> covered by the per-type first-class views.
 
 ## 9. Procedure — `procedure.ViewDefinition.json`
 

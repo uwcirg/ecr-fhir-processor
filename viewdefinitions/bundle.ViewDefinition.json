@@ -4,7 +4,7 @@
   "name": "bundle_view",
   "status": "active",
   "resource": "Bundle",
-  "description": "Container-level metadata view: one row per first-class Bundle persisted by this project. Metadata-only (FR-011) — nested clinical content is NOT flattened here; it is promoted to first-class resources covered by the other views (Principle VI). Default column set is an informed, reviewable default (FR-002), not a finalized analytics-team contract.",
+  "description": "Container-level metadata view: one row per first-class Bundle persisted by this project. Metadata-only (FR-011) — nested clinical content is NOT flattened here; it is promoted to first-class resources covered by the other views (Principle VI). NOTE: an entry_count column (entry.count()) was dropped because the target Aidbox materialization engine does not implement the FHIRPath count() aggregate in column expressions ($materialize HTTP 500: \"No method in multimethod 'geval' for dispatch value: count\"); the authoritative conformance gate is server acceptance (research.md R5), so the column is omitted rather than materialize-failing the view. Default column set is an informed, reviewable default (FR-002), not a finalized analytics-team contract.",
   "select": [
     {
       "column": [
@@ -12,7 +12,6 @@
         { "name": "type", "path": "type", "type": "code" },
         { "name": "timestamp", "path": "timestamp", "type": "instant" },
         { "name": "identifier", "path": "identifier.value", "type": "string" },
-        { "name": "entry_count", "path": "entry.count()", "type": "integer" },
         { "name": "cms_measure", "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/cms-measure').code.first()", "type": "code" }
       ]
     }

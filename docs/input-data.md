@@ -11,7 +11,38 @@ For *what the processor does* with these files, see
 
 ---
 
-## 1. Tree layout
+## 1. Patient populations (the reporting funnel)
+
+Public-health researchers reading this data are usually computing **proportions** — a
+sub-population over a larger one it sits inside. The populations below are the nested
+cohorts those ratios are drawn from: **each is a subset of the one above it**, so *any*
+band can act as the denominator for a band below it. For example, you might ask what
+fraction of **Seen/Triggered Patients** reach the **Initial Population**, or what
+fraction of the **Initial Population** lands in the **Numerator**. (The two bands
+literally named *Denominator* and *Numerator* are just the CMS measure's *own* built-in
+proportion; the nesting lets researchers frame others.) The terminology and diagram
+come from APHL's *Triggering & Reporting Flow* — please reuse these names when referring
+to the populations.
+
+![Triggering & Reporting Flow — the patient-population funnel: Total Patient Population → Seen/Triggered Patients → Initial Population → Denominator → Numerator. The Seen/Triggered band and everything below it is "sent to Public Health Agencies (PHA)"; the Initial Population band and below is "our measure cohort + proportion".](images/TRAX.Patient.Pipeline.PerAPHL.2026.FromSlides.jpg)
+
+| Population | Who it is | What data we hold | How to identify it in this repo |
+|---|---|---|---|
+| **Total Patient Population** | Anyone ever seen at the hospital. | *None for most of them.* We only hold the subset that meets the trigger criteria below — true for both the test fixtures **and** real data. | n/a |
+| **Seen/Triggered Patients** | Those who had an encounter during the target time period. | A FHIR **collection Bundle** (line-level patient/encounter data) **+ a MeasureReport** indicating which sub-population (below) the patient is in. | Every scenario folder under `test/input/` — both `standard/` **and** `not-in-population/`. |
+| **Initial Population** | Triggered patients who *also* meet the Measure's additional filtering (age, encounter, and diagnosis criteria). | Everything above, **plus an eCR `Bundle`** (the eICR message / submission unit) added alongside. | The `standard/` folders — the **three-file** set (§3). NIP folders are triggered but *fail* IP, so they get **no** eCR. |
+| **Denominator** | **Everyone** in the Initial Population. | (same artifacts as Initial Population) | The `denominator` population in the MeasureReport — set to `true`/`1` on **all** IP records. |
+| **Numerator** | The subset of the Initial Population that **eCRNow determined matches the CMS measure's criteria**. | (same artifacts as Initial Population) | The `numerator` population in the MeasureReport set to `true`/`1`. |
+
+All of these per-patient flags and counts are read from the **MeasureReport**, which is
+first-class for every case and is the analytic spine for this data (§7). In the diagram,
+everything **at or below Seen/Triggered Patients is sent to Public Health Agencies
+(PHA)**, and the **Initial Population → Numerator** band is the CMS "measure cohort +
+proportion."
+
+---
+
+## 2. Tree layout
 
 ```
 test/input/
@@ -43,10 +74,12 @@ test/input/
 
 ---
 
-## 2. The 'standard' set — three files, one patient
+## 3. The Initial Population set — three files, one patient
 
-Each standard scenario is **three JSON files that describe the same patient
-encounter from three angles**. The **Patient GUID is the spine** that ties them
+The `standard/` folders hold the **Initial Population** cases from §1 (triggered
+patients who also met the Measure's filtering, so an eCR was generated). Each such
+scenario is **three JSON files that describe the same patient encounter from three
+angles**. The **Patient GUID is the spine** that ties them
 together; every file refers to the same `Patient/<GUID>`.
 
 ```
@@ -78,8 +111,8 @@ together; every file refers to the same `Patient/<GUID>`.
   Organization, Location.** May contain extras per scenario (CMS165
   `bulk_dial_high` adds a second `Condition` and a `Procedure` for dialysis).
 - **Practitioner / Organization / Location are shared reference resources**: they
-  reuse **identical GUIDs across scenarios and across the nested eICR** (see §4).
-  *(The supplier PDF §3 omits these three resources entirely — see §5.)*
+  reuse **identical GUIDs across scenarios and across the nested eICR** (see §5).
+  *(The supplier PDF §3 omits these three resources entirely — see §6.)*
 
 ### File 2 — `MeasureReport_<uuid>.json` — **the expected evaluation result**
 - `subject → Patient/<same GUID>` as File 1.
@@ -178,8 +211,9 @@ eCRNow, get files 2 and 3" conflates the two engines.
 
 ---
 
-## 3. The 'not-in-population' set — two files
+## 4. The 'not-in-population' set — two files
 
+These are **Seen/Triggered Patients who are *not* in the Initial Population** (§1).
 When the patient fails Initial Population criteria, **no eCR is generated**, so the
 message Bundle is absent:
 
@@ -193,7 +227,7 @@ count (data-model.md, `ScenarioFolder`).
 
 ---
 
-## 4. Cross-scenario GUID behavior (why it matters for persistence)
+## 5. Cross-scenario GUID behavior (why it matters for persistence)
 
 | Resource kind | GUID behavior | Consequence |
 |---|---|---|
@@ -208,7 +242,7 @@ collection bundle and the nested eICR.
 
 ---
 
-## 5. Deltas from the supplier PDF
+## 6. Deltas from the supplier PDF
 
 Gaps/discrepancies between `CDS_TestData_DocumentationFor05252026zip.pdf` and the
 actual fixtures, worth keeping in mind:
@@ -216,7 +250,7 @@ actual fixtures, worth keeping in mind:
 1. **Omitted shared resources.** PDF §3 lists Patient/Encounter/Condition/
    Observation/MedicationRequest/ServiceRequest/Procedure but **omits the
    Practitioner, Organization, and Location** that are always present and are the
-   basis of the dedup design (§4).
+   basis of the dedup design (§5).
 2. **"Standard Folder (4 files)" vs. 3 here.** The 4th file is the **XML copy** of
    the eCR bundle ("Provided in both JSON and XML… identical content"). This repo
    keeps only the JSON files (3 per standard scenario).
@@ -229,7 +263,7 @@ actual fixtures, worth keeping in mind:
 
 ---
 
-## 6. Downstream consumer & analytics (Aidbox SQL-on-FHIR)
+## 7. Downstream consumer & analytics (Aidbox SQL-on-FHIR)
 
 The primary consumer is a **state Department of Health**. The processor persists into
 **Aidbox**; the DoH analytics team then authors **SQL-on-FHIR `ViewDefinition`s** to
@@ -240,9 +274,9 @@ measures' numerator and denominator"* — **plus the not-in-population cases.** 
 this data:
 
 - The **eCR payload is `Bundle_<uuid>.json`** (File 3) and exists **only for
-  in-population** cases. It is the DoH-facing artifact, and the **`Composition`** (§2)
+  in-population** cases. It is the DoH-facing artifact, and the **`Composition`** (§3)
   is what they care about most. The reduced fidelity of the eICR's *nested clinical
-  copies* (§2) is acceptable to this consumer.
+  copies* (§3) is acceptable to this consumer.
 - **NIP cases are in scope too**, but they have **no eCR payload** — they are
   represented by their (zero-count) **MeasureReport** + collection-bundle resources.
 

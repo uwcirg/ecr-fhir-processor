@@ -157,6 +157,39 @@ SELECT cms_measure, count(*) FROM sof.patient_view GROUP BY cms_measure;  -- dis
 A Patient persisted before this column existed (not yet re-processed) yields `NULL` here,
 never an error.
 
+### Joining views (`AidboxQuery`)
+
+Reference columns (e.g. Observation `subject`) hold the referenced resource's **key** —
+emitted via `getReferenceKey()`, equal to the target view's `getResourceKey()` `id` — so
+views join directly without a `Type/` prefix to strip. (A raw `.reference` string column
+would be `NULL` under Aidbox's reference normalization; see
+[research.md R4](specs/004-remaining-viewdefinitions/research.md).) Save a reusable query as
+an `AidboxQuery` resource, then call it by name. In the Aidbox REST console at
+`https://<aidbox-url>/ui/console#/rest`:
+
+```http
+PUT /AidboxQuery/aidboxquery_ecr_test_patient_obs
+accept:application/json
+content-type:application/json
+
+{
+    "resourceType": "AidboxQuery",
+    "query": "select pt.id, pt.name_family, pt.name_given, pt.birth_date, ob.cms_measure, ob.category, ob.code_display from sof.patient_view pt join sof.observation_view ob on ob.subject = pt.id;"
+}
+```
+
+Then invoke it by name — it's a plain `GET`, so you can just paste this URL into your
+browser's address bar (no CLI or special UI needed). The join key `ob.subject = pt.id` is
+what `getReferenceKey()` makes possible:
+
+```
+https://<aidbox-url>/$query/aidboxquery_ecr_test_patient_obs
+```
+
+This is an illustrative join, not a clinically-vetted public-health query — it shows the
+mechanics (key-based view joins, `cms_measure` carried through), and the column list is the
+analyst's to refine.
+
 **Conformance gate.** A `ViewDefinition` is a SQL-on-FHIR logical-model resource, outside
 the eCR/US-Core IG set, so its conformance gate is **Aidbox acceptance** (`PUT` accepted +
 `$materialize` succeeds) — *not* `validator_cli.jar`. A unit test checks the checked-in

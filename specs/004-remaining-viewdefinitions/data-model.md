@@ -40,8 +40,9 @@ meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/
 
 Per-type tables below list the **additional** columns (the `id` + `cms_measure` pair is implied).
 Rules for all: select only first-class resources (FR-003, VI); absent field → null, no fabrication
-(FR-007); multi-valued → deterministic `.first()` (FR-008); reference elements expose the reference
-string, not the resolved target (R4).
+(FR-007); multi-valued → deterministic `.first()` (FR-008); reference elements expose the
+referenced resource's **key** via `getReferenceKey()` (not the raw reference string), so the column
+joins to the target view's `getResourceKey()` `id` (R4).
 
 ---
 
@@ -55,8 +56,8 @@ string, not the resolved target (R4).
 | `code` | `code.coding.first().code` | code |
 | `code_system` | `code.coding.first().system` | string |
 | `code_display` | `code.coding.first().display` | string |
-| `subject` | `subject.reference` | string |
-| `encounter` | `encounter.reference` | string |
+| `subject` | `subject.getReferenceKey()` | string |
+| `encounter` | `encounter.getReferenceKey()` | string |
 | `onset_date_time` | `onset.ofType(dateTime)` | dateTime |
 | `recorded_date` | `recordedDate` | dateTime |
 
@@ -68,11 +69,11 @@ string, not the resolved target (R4).
 | `class` | `class.code` | code |
 | `type` | `type.first().coding.first().code` | code |
 | `type_display` | `type.first().coding.first().display` | string |
-| `subject` | `subject.reference` | string |
+| `subject` | `subject.getReferenceKey()` | string |
 | `period_start` | `period.start` | dateTime |
 | `period_end` | `period.end` | dateTime |
-| `service_provider` | `serviceProvider.reference` | string |
-| `location` | `location.first().location.reference` | string |
+| `service_provider` | `serviceProvider.getReferenceKey()` | string |
+| `location` | `location.first().location.getReferenceKey()` | string |
 
 ## 3. Observation — `observation.ViewDefinition.json`
 
@@ -88,8 +89,8 @@ string, not the resolved target (R4).
 | `value_code` | `value.ofType(CodeableConcept).coding.first().code` | code |
 | `value_string` | `value.ofType(string)` | string |
 | `effective_date_time` | `effective.ofType(dateTime)` | dateTime |
-| `subject` | `subject.reference` | string |
-| `encounter` | `encounter.reference` | string |
+| `subject` | `subject.getReferenceKey()` | string |
+| `encounter` | `encounter.getReferenceKey()` | string |
 
 ## 4. Practitioner — `practitioner.ViewDefinition.json`
 
@@ -128,7 +129,7 @@ string, not the resolved target (R4).
 | `address_city` | `address.first().city` | string |
 | `address_state` | `address.first().state` | string |
 | `address_postal_code` | `address.first().postalCode` | string |
-| `managing_organization` | `managingOrganization.reference` | string |
+| `managing_organization` | `managingOrganization.getReferenceKey()` | string |
 
 ## 7. Measure — `measure.ViewDefinition.json`  *(empty-until-loaded, research.md R5)*
 
@@ -173,8 +174,8 @@ string, not the resolved target (R4).
 | `category` | `category.coding.first().code` | code |
 | `code` | `code.coding.first().code` | code |
 | `code_display` | `code.coding.first().display` | string |
-| `subject` | `subject.reference` | string |
-| `encounter` | `encounter.reference` | string |
+| `subject` | `subject.getReferenceKey()` | string |
+| `encounter` | `encounter.getReferenceKey()` | string |
 | `performed_date_time` | `performed.ofType(dateTime)` | dateTime |
 
 ## 10. MedicationRequest — `medicationrequest.ViewDefinition.json`
@@ -185,11 +186,11 @@ string, not the resolved target (R4).
 | `intent` | `intent` | code |
 | `medication_code` | `medication.ofType(CodeableConcept).coding.first().code` | code |
 | `medication_display` | `medication.ofType(CodeableConcept).coding.first().display` | string |
-| `medication_reference` | `medication.ofType(Reference).reference` | string |
-| `subject` | `subject.reference` | string |
-| `encounter` | `encounter.reference` | string |
+| `medication_reference` | `medication.ofType(Reference).getReferenceKey()` | string |
+| `subject` | `subject.getReferenceKey()` | string |
+| `encounter` | `encounter.getReferenceKey()` | string |
 | `authored_on` | `authoredOn` | dateTime |
-| `requester` | `requester.reference` | string |
+| `requester` | `requester.getReferenceKey()` | string |
 
 ## 11. ServiceRequest — `servicerequest.ViewDefinition.json`
 
@@ -200,10 +201,10 @@ string, not the resolved target (R4).
 | `category` | `category.first().coding.first().code` | code |
 | `code` | `code.coding.first().code` | code |
 | `code_display` | `code.coding.first().display` | string |
-| `subject` | `subject.reference` | string |
-| `encounter` | `encounter.reference` | string |
+| `subject` | `subject.getReferenceKey()` | string |
+| `encounter` | `encounter.getReferenceKey()` | string |
 | `authored_on` | `authoredOn` | dateTime |
-| `requester` | `requester.reference` | string |
+| `requester` | `requester.getReferenceKey()` | string |
 
 ---
 

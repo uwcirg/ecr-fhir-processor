@@ -57,21 +57,36 @@ reviewable `forEach` added per-column later — not a default, to avoid surprisi
 **Alternatives considered**: `forEach` on `code.coding` / `category` by default — rejected: silently
 multiplies rows; the analyst expects one row per resource unless they opt in.
 
-## R4 — Choice types and references: typed primary variant + reference string
+## R4 — Choice types and references: typed primary variant + reference key
 
 **Decision**: For `value[x]` / `medication[x]` / `performed[x]` etc., expose the
 analytically-primary variant(s) as typed columns (e.g. Observation `value_quantity_value` +
 `value_quantity_unit` from `value.ofType(Quantity)`, plus a `value_string` /
-`value_codeable_code`); absent variants are null. Reference elements expose the **reference string**
-(e.g. `subject.reference`), not the resolved target.
+`value_codeable_code`); absent variants are null. Reference elements expose the referenced
+resource's **key** via `getReferenceKey()` (e.g. `subject.getReferenceKey()`), not the raw
+`Reference.reference` string and not the resolved target.
 
 **Rationale**: SQL-on-FHIR columns are scalar; `ofType()` selects the present choice and yields null
-otherwise (FR-007, never fabricate). Resolving references server-side is out of scope — the analyst
-joins views on the reference key. Grounded in the fixtures: Observations carry `valueQuantity`;
-MedicationRequest carries `medicationCodeableConcept`; Procedure carries `performedDateTime`.
+otherwise (FR-007, never fabricate). For references, `getReferenceKey()` is the SQL-on-FHIR-defined
+counterpart to the `getResourceKey()` used for each view's `id` column: it returns a key that
+**equals** the target view's `id`, so the analyst joins views directly (Condition.subject →
+Patient.id) with no string-prefix mismatch. Resolving references server-side is out of scope.
+Grounded in the fixtures: Observations carry `valueQuantity`; MedicationRequest carries
+`medicationCodeableConcept`; Procedure carries `performedDateTime`.
+
+> **Aidbox `.reference`-normalization gotcha (why not `subject.reference`).** Aidbox normalizes
+> FHIR `Reference` elements on ingestion, storing `{"reference": "Patient/<id>"}` internally as
+> `{"id": "<id>", "resourceType": "Patient"}`. The `$materialize` engine evaluates FHIRPath against
+> that stored form, so a `subject.reference` column resolves to **null for every row** even though
+> the FHIR API re-serializes the resource with `.reference` present (which makes the field look fine
+> when inspected directly). `getReferenceKey()` reads the normalized form correctly. This first
+> surfaced in `condition_view` (Patient, the only reference-free view, never hit it); the fix was
+> applied to every reference column across all views. Confirmed against the live server.
 
 **Alternatives considered**: One opaque JSON column per choice — rejected: defeats the point of a
-flat view. Resolving references into denormalized columns — rejected: scope creep, brittle.
+flat view. Resolving references into denormalized columns — rejected: scope creep, brittle. Raw
+`Reference.reference` string columns — rejected: null under Aidbox normalization (see gotcha above)
+and would carry a `Type/` prefix that breaks the join to `getResourceKey()` ids anyway.
 
 ## R5 — Measure view is authored but empty-until-loaded; conformance gate is server acceptance
 
@@ -147,7 +162,7 @@ asserted loosely — key column + provenance + cms_measure presence — not pinn
 | R1 | Files only — the existing publish step already auto-discovers; no production code change |
 | R2 | Every view reuses Patient's provenance `where` + `cms_measure` column (all types are stamped) |
 | R3 | One row per resource: `.first()` reducers, no default `forEach` |
-| R4 | Choice types → typed primary variant via `ofType()`; references → reference string |
+| R4 | Choice types → typed primary variant via `ofType()`; references → `getReferenceKey()` (Aidbox normalizes `.reference` to null) |
 | R5 | Measure view authored but empty-until-loaded; gate = Aidbox `PUT` + `$materialize` |
 | R6 | Bundle view is metadata-only (type/timestamp/identifier/entry_count) |
 | R7 | Per-type columns are informed, reviewable defaults grounded in the fixtures |

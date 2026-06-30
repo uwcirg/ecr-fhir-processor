@@ -13,11 +13,11 @@
         { "name": "intent", "path": "intent", "type": "code" },
         { "name": "medication_code", "path": "medication.ofType(CodeableConcept).coding.first().code", "type": "code" },
         { "name": "medication_display", "path": "medication.ofType(CodeableConcept).coding.first().display", "type": "string" },
-        { "name": "medication_reference", "path": "medication.ofType(Reference).reference", "type": "string" },
-        { "name": "subject", "path": "subject.reference", "type": "string" },
-        { "name": "encounter", "path": "encounter.reference", "type": "string" },
+        { "name": "medication_reference", "path": "medication.ofType(Reference).getReferenceKey()", "type": "string" },
+        { "name": "subject", "path": "subject.getReferenceKey()", "type": "string" },
+        { "name": "encounter", "path": "encounter.getReferenceKey()", "type": "string" },
         { "name": "authored_on", "path": "authoredOn", "type": "dateTime" },
-        { "name": "requester", "path": "requester.reference", "type": "string" },
+        { "name": "requester", "path": "requester.getReferenceKey()", "type": "string" },
         { "name": "cms_measure", "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/cms-measure').code.first()", "type": "code" }
       ]
     }

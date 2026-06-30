@@ -13,11 +13,11 @@
         { "name": "class", "path": "class.code", "type": "code" },
         { "name": "type", "path": "type.first().coding.first().code", "type": "code" },
         { "name": "type_display", "path": "type.first().coding.first().display", "type": "string" },
-        { "name": "subject", "path": "subject.reference", "type": "string" },
+        { "name": "subject", "path": "subject.getReferenceKey()", "type": "string" },
         { "name": "period_start", "path": "period.start", "type": "dateTime" },
         { "name": "period_end", "path": "period.end", "type": "dateTime" },
-        { "name": "service_provider", "path": "serviceProvider.reference", "type": "string" },
-        { "name": "location", "path": "location.first().location.reference", "type": "string" },
+        { "name": "service_provider", "path": "serviceProvider.getReferenceKey()", "type": "string" },
+        { "name": "location", "path": "location.first().location.getReferenceKey()", "type": "string" },
         { "name": "cms_measure", "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/cms-measure').code.first()", "type": "code" }
       ]
     }

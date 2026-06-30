@@ -16,7 +16,7 @@
         { "name": "address_city", "path": "address.first().city", "type": "string" },
         { "name": "address_state", "path": "address.first().state", "type": "string" },
         { "name": "address_postal_code", "path": "address.first().postalCode", "type": "string" },
-        { "name": "managing_organization", "path": "managingOrganization.reference", "type": "string" },
+        { "name": "managing_organization", "path": "managingOrganization.getReferenceKey()", "type": "string" },
         { "name": "cms_measure", "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/cms-measure').code.first()", "type": "code" }
       ]
     }

@@ -133,7 +133,10 @@ measure code and confirm only that measure's resources are returned.
   Procedure `performed[x]`): the view exposes the analytically-primary variant(s) as typed
   columns; absent variants are null.
 - **Reference columns** (subject, encounter, requester, performer, etc.): the view exposes the
-  reference string/key, not the resolved target; cross-view joins are the analyst's to make.
+  referenced resource's key via `getReferenceKey()` (which matches the target view's
+  `getResourceKey()` `id`), not the resolved target; cross-view joins are the analyst's to make.
+  (A raw `.reference` string column resolves to null under Aidbox's reference normalization — see
+  research.md R4.)
 - **Bundle as a resource type**: the Bundle view is metadata-only (type, timestamp, entry
   count, identifier); it does not attempt to flatten nested clinical content, which is already
   promoted to its own first-class resources and covered by the other views.

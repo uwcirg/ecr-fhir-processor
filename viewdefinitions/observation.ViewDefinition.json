@@ -19,8 +19,8 @@
         { "name": "value_code", "path": "value.ofType(CodeableConcept).coding.first().code", "type": "code" },
         { "name": "value_string", "path": "value.ofType(string)", "type": "string" },
         { "name": "effective_date_time", "path": "effective.ofType(dateTime)", "type": "dateTime" },
-        { "name": "subject", "path": "subject.reference", "type": "string" },
-        { "name": "encounter", "path": "encounter.reference", "type": "string" },
+        { "name": "subject", "path": "subject.getReferenceKey()", "type": "string" },
+        { "name": "encounter", "path": "encounter.getReferenceKey()", "type": "string" },
         { "name": "cms_measure", "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/cms-measure').code.first()", "type": "code" }
       ]
     }

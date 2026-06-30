@@ -1,0 +1,31 @@
+{
+  "resourceType": "ViewDefinition",
+  "id": "medicationrequest",
+  "name": "medicationrequest_view",
+  "status": "active",
+  "resource": "MedicationRequest",
+  "description": "Flattened analytics view: one row per first-class MedicationRequest persisted by this project. Default column set is an informed, reviewable default (FR-002), not a finalized analytics-team contract.",
+  "select": [
+    {
+      "column": [
+        { "name": "id", "path": "getResourceKey()", "type": "string" },
+        { "name": "status", "path": "status", "type": "code" },
+        { "name": "intent", "path": "intent", "type": "code" },
+        { "name": "medication_code", "path": "medication.ofType(CodeableConcept).coding.first().code", "type": "code" },
+        { "name": "medication_display", "path": "medication.ofType(CodeableConcept).coding.first().display", "type": "string" },
+        { "name": "medication_reference", "path": "medication.ofType(Reference).getReferenceKey()", "type": "string" },
+        { "name": "subject", "path": "subject.getReferenceKey()", "type": "string" },
+        { "name": "encounter", "path": "encounter.getReferenceKey()", "type": "string" },
+        { "name": "authored_on", "path": "authoredOn", "type": "dateTime" },
+        { "name": "requester", "path": "requester.getReferenceKey()", "type": "string" },
+        { "name": "cms_measure", "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/cms-measure').code.first()", "type": "code" }
+      ]
+    }
+  ],
+  "where": [
+    {
+      "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/processed-by' and code = 'ecr-fhir-processor').exists()",
+      "description": "Scope the view to MedicationRequests persisted by this project's processor (FR-005): match this processor's provenance tag (processed-by = ecr-fhir-processor), version-agnostic. Excludes unrelated MedicationRequest resources on the same server."
+    }
+  ]
+}

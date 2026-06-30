@@ -1,0 +1,29 @@
+{
+  "resourceType": "ViewDefinition",
+  "id": "procedure",
+  "name": "procedure_view",
+  "status": "active",
+  "resource": "Procedure",
+  "description": "Flattened analytics view: one row per first-class Procedure persisted by this project. Default column set is an informed, reviewable default (FR-002), not a finalized analytics-team contract.",
+  "select": [
+    {
+      "column": [
+        { "name": "id", "path": "getResourceKey()", "type": "string" },
+        { "name": "status", "path": "status", "type": "code" },
+        { "name": "category", "path": "category.coding.first().code", "type": "code" },
+        { "name": "code", "path": "code.coding.first().code", "type": "code" },
+        { "name": "code_display", "path": "code.coding.first().display", "type": "string" },
+        { "name": "subject", "path": "subject.getReferenceKey()", "type": "string" },
+        { "name": "encounter", "path": "encounter.getReferenceKey()", "type": "string" },
+        { "name": "performed_date_time", "path": "performed.ofType(dateTime)", "type": "dateTime" },
+        { "name": "cms_measure", "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/cms-measure').code.first()", "type": "code" }
+      ]
+    }
+  ],
+  "where": [
+    {
+      "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/processed-by' and code = 'ecr-fhir-processor').exists()",
+      "description": "Scope the view to Procedures persisted by this project's processor (FR-005): match this processor's provenance tag (processed-by = ecr-fhir-processor), version-agnostic. Excludes unrelated Procedure resources on the same server."
+    }
+  ]
+}

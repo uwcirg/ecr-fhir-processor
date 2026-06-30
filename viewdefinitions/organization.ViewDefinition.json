@@ -1,0 +1,29 @@
+{
+  "resourceType": "ViewDefinition",
+  "id": "organization",
+  "name": "organization_view",
+  "status": "active",
+  "resource": "Organization",
+  "description": "Flattened analytics view: one row per first-class Organization persisted by this project. Default column set is an informed, reviewable default (FR-002), not a finalized analytics-team contract.",
+  "select": [
+    {
+      "column": [
+        { "name": "id", "path": "getResourceKey()", "type": "string" },
+        { "name": "identifier", "path": "identifier.first().value", "type": "string" },
+        { "name": "name", "path": "name", "type": "string" },
+        { "name": "type", "path": "type.first().coding.first().code", "type": "code" },
+        { "name": "active", "path": "active", "type": "boolean" },
+        { "name": "address_city", "path": "address.first().city", "type": "string" },
+        { "name": "address_state", "path": "address.first().state", "type": "string" },
+        { "name": "address_postal_code", "path": "address.first().postalCode", "type": "string" },
+        { "name": "cms_measure", "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/cms-measure').code.first()", "type": "code" }
+      ]
+    }
+  ],
+  "where": [
+    {
+      "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/processed-by' and code = 'ecr-fhir-processor').exists()",
+      "description": "Scope the view to Organizations persisted by this project's processor (FR-005): match this processor's provenance tag (processed-by = ecr-fhir-processor), version-agnostic. Excludes unrelated Organization resources on the same server."
+    }
+  ]
+}

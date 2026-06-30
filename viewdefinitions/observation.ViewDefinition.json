@@ -1,0 +1,34 @@
+{
+  "resourceType": "ViewDefinition",
+  "id": "observation",
+  "name": "observation_view",
+  "status": "active",
+  "resource": "Observation",
+  "description": "Flattened analytics view: one row per first-class Observation persisted by this project. Default column set is an informed, reviewable default (FR-002), not a finalized analytics-team contract.",
+  "select": [
+    {
+      "column": [
+        { "name": "id", "path": "getResourceKey()", "type": "string" },
+        { "name": "status", "path": "status", "type": "code" },
+        { "name": "category", "path": "category.first().coding.first().code", "type": "code" },
+        { "name": "code", "path": "code.coding.first().code", "type": "code" },
+        { "name": "code_system", "path": "code.coding.first().system", "type": "string" },
+        { "name": "code_display", "path": "code.coding.first().display", "type": "string" },
+        { "name": "value_quantity", "path": "value.ofType(Quantity).value", "type": "decimal" },
+        { "name": "value_unit", "path": "value.ofType(Quantity).unit", "type": "string" },
+        { "name": "value_code", "path": "value.ofType(CodeableConcept).coding.first().code", "type": "code" },
+        { "name": "value_string", "path": "value.ofType(string)", "type": "string" },
+        { "name": "effective_date_time", "path": "effective.ofType(dateTime)", "type": "dateTime" },
+        { "name": "subject", "path": "subject.getReferenceKey()", "type": "string" },
+        { "name": "encounter", "path": "encounter.getReferenceKey()", "type": "string" },
+        { "name": "cms_measure", "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/cms-measure').code.first()", "type": "code" }
+      ]
+    }
+  ],
+  "where": [
+    {
+      "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/processed-by' and code = 'ecr-fhir-processor').exists()",
+      "description": "Scope the view to Observations persisted by this project's processor (FR-005): match this processor's provenance tag (processed-by = ecr-fhir-processor), version-agnostic. Excludes unrelated Observation resources on the same server."
+    }
+  ]
+}

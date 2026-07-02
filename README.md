@@ -124,7 +124,7 @@ only where no lever exists (see [`known-validation-issues.md`](known-validation-
   `config.server.validation_skip` includes `"reference"`. **No content is edited** — the
   submitted bytes equal the emitted bytes.
 - **Cause 3 — terminology display binding** (the MeasureReports). Cleared **box-side** by
-  leaving `AIDBOX_TERMINOLOGY_SERVICE_BASE_URL` unset. The processor makes **no** content
+  leaving `BOX_FHIR_TERMINOLOGY_SERVICE_BASE_URL` unset. The processor makes **no** content
   change and never rewrites terminology displays.
 - **Cause 2 — base-FHIR `mrp-2` invariant** (every MeasureReport, standalone and nested in
   message Bundles). The **only** cause with no non-mutating lever, so the **only** content

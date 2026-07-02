@@ -12,7 +12,7 @@ for the outcome model, and the contracts for exact rules.
 - A reachable **Aidbox** with the **FHIR Schema engine enabled** (`BOX_FHIR_SCHEMA_VALIDATION=true`,
   FR-014) and, for the two non-mutating levers:
   - `BOX_FHIR_VALIDATION_SKIP_REFERENCE=true` (enables the Cause-1 per-request header), and
-  - `AIDBOX_TERMINOLOGY_SERVICE_BASE_URL` **unset** (Cause 3 binding validation off).
+  - `BOX_FHIR_TERMINOLOGY_SERVICE_BASE_URL` **unset** (Cause 3 binding validation off).
 - `config.json` copied from `config.example.json` with real `server` credentials and
   **`"validation_skip": ["reference"]`** (Cause 1 lever).
 

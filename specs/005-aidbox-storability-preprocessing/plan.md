@@ -22,7 +22,7 @@ transform):
    `"reference"` (`fhir_common.py:259`). **No content change; no new code** — this feature confirms
    and documents the lever (empirically 39→42 on 2026-06-12).
 2. **Cause 3 — terminology display-name binding (the MeasureReports).** Cleared **box-side** by
-   leaving `AIDBOX_TERMINOLOGY_SERVICE_BASE_URL` unset. **No processor change** — the processor MUST
+   leaving `BOX_FHIR_TERMINOLOGY_SERVICE_BASE_URL` unset. **No processor change** — the processor MUST
    NOT rewrite terminology displays (FR-004).
 3. **Cause 2 — base-FHIR `mrp-2` invariant (every MeasureReport, 5 standalone + 3 nested in message
    Bundles).** The **only** cause with no non-mutating lever and the crux of this feature. A new,

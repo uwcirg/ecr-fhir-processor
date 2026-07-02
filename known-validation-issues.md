@@ -201,11 +201,11 @@ REMEDIATION: aidbox-cause-2-mrp2-stratum-prune
   the **terminology display-name mismatches** already noted as upstream in
   "How the gate decides pass/fail" above. Upstream, not ours.
 - **Aidbox workaround:** the FHIR Schema validator validates terminology bindings only when an
-  external terminology server is configured via `AIDBOX_TERMINOLOGY_SERVICE_BASE_URL`; leaving
+  external terminology server is configured via `BOX_FHIR_TERMINOLOGY_SERVICE_BASE_URL`; leaving
   it **unset** skips binding validation box-wide. (It also enforces only `required`-strength
   bindings; weaker strengths are ignored.)
 - **Chosen remediation (Principle VIII — non-mutating box-side lever):** rely on the box
-  leaving `AIDBOX_TERMINOLOGY_SERVICE_BASE_URL` **unset**. The processor makes **no** content
+  leaving `BOX_FHIR_TERMINOLOGY_SERVICE_BASE_URL` **unset**. The processor makes **no** content
   change — it MUST NOT rewrite terminology displays (FR-004). No per-request code path is
   involved; the reliance is recorded here and keyed to `REMEDIATION_TERMINOLOGY_UNSET`.
 
@@ -217,7 +217,7 @@ REMEDIATION: aidbox-cause-3-terminology-unset
 | --- | --- | --- | --- |
 | `BOX_FHIR_SCHEMA_VALIDATION=false` | box-wide | **DO NOT USE** | Not a validation switch — an engine selector. `false` reverts to the deprecated legacy engine: console warns to migrate, and **every FHIR PUT 404s** (`not found`). Breaks the FHIR API; does not relax validation. FHIR Schema validation is mandatory — always keep `=true`. |
 | `BOX_FHIR_VALIDATION_SKIP_REFERENCE=true` + `aidbox-validation-skip` header | **per-request** | Cause 1 (**confirmed**) | Only per-PUT lever. Sent by the processor via `config.server.validation_skip` (e.g. `["reference"]`). Confirmed 2026-06-12 to also cover target-profile *conformance*, not just existence. |
-| `AIDBOX_TERMINOLOGY_SERVICE_BASE_URL` unset | box-wide | Cause 3 | No terminology server ⇒ binding validation skipped. |
+| `BOX_FHIR_TERMINOLOGY_SERVICE_BASE_URL` unset | box-wide | Cause 3 | No terminology server ⇒ binding validation skipped. Exact name per [Aidbox settings reference](https://www.health-samurai.io/docs/aidbox/reference/all-settings#fhir-terminology-service-base-url) (note the `BOX_FHIR_` prefix — **not** `AIDBOX_`; the wrong name silently re-enables Cause 3, seen in the 2026-07-02 run). |
 | `BOX_FHIR_VALIDATOR_STRICT_PROFILE_RESOLUTION` / `..._STRICT_EXTENSION_RESOLUTION` | box-wide | — | Default `false`: *unknown* profiles/extensions ignored. Does not help Causes 1–3 (profiles are loaded). |
 
 **Key takeaway:** with the schema engine kept **on** (`BOX_FHIR_SCHEMA_VALIDATION=true`,

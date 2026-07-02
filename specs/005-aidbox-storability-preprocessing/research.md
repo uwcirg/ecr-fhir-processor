@@ -25,7 +25,7 @@ after this pass.
 
 ## R2 — Cause 3 (terminology display-name binding): box-side config, no transform
 
-- **Decision**: Rely on the target box leaving `AIDBOX_TERMINOLOGY_SERVICE_BASE_URL` **unset** (binding
+- **Decision**: Rely on the target box leaving `BOX_FHIR_TERMINOLOGY_SERVICE_BASE_URL` **unset** (binding
   validation skipped box-wide). The processor MUST NOT rewrite terminology `display` values (FR-004).
 - **Rationale**: This is a box-side non-mutating lever (Principle VIII). The mismatched display
   (`decrease` → "Lower score indicates better quality") is upstream supplier data of the same class the

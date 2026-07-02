@@ -138,6 +138,31 @@ after this pass.
 
 ---
 
+## R9 — Cause 4 (`ext-1` empty trigger-code sub-extension) + transform visibility (2026-07-02 amendment)
+
+- **Context**: the first live run with the Cause 2 transform (`log/…101340.log`) exposed two things the
+  three-cause model missed. (a) The CMS2 eICR Composition carries an empty `triggerCodeValueSetVersion`
+  sub-extension (`{"url": …}` only) under `eicr-trigger-code-flag-extension`, rejected by base-FHIR
+  `ext-1` (`extension.exists() != value.exists()`) — a fourth cause. (b) The run also failed every
+  MeasureReport on Cause 3 because the box had `BOX_FHIR_TERMINOLOGY_SERVICE_BASE_URL` **set** (the docs
+  had named the wrong env var); the Cause 2 prune had run correctly but, because the resource then
+  failed, the summary reported `remediated=0` — the successful transform was invisible.
+- **Decision (Cause 4)**: like Cause 2, `ext-1` has **no non-mutating lever** (it is a base cardinality
+  invariant, not a resolution/terminology toggle), so add a second structure-only, non-fabricating
+  transform — remove each child of a trigger-code-flag extension that carries neither a `value[x]` nor
+  nested extensions. Preserve `triggerCode`/`triggerCodeValueSet`; never fabricate a version. Same
+  scope/mirror/logging discipline as Cause 2 (FR-015).
+- **Decision (visibility, FR-016)**: record `remediations_applied` on the `FileOutcome` **regardless of
+  the PUT result**, and report a `transformed` count in the per-type + total summary
+  (`transformed >= remediated`), so a transform that ran but did not store is never invisible.
+  `remediated` keeps its stored-via-transform meaning; `transformed` never affects the exit code.
+- **Alternatives considered**: *rewrite the terminology display / fabricate a version value* — rejected
+  (Principle V; FR-004); the correct fix for Cause 3 is the box config (`unset`), not a content change.
+  *Defer the CMS2 Bundle* — rejected: FR-007 deferral is for "storable only via fabrication," which is
+  not the case here (the empty version carries no clinical content).
+
+---
+
 ## Summary of decisions
 
 | # | Topic | Decision |
@@ -150,3 +175,4 @@ after this pass.
 | R6 | Deferral & exit codes | Add remediated + deferred states; three-state exit (0 / deferrals / unexpected error) |
 | R7 | No conformance regression | HL7 gate over transformed output; zero new signatures; baseline may drop, never gain |
 | R8 | Profile requirement check | DEQM/eCR don't mandate the malformed stratum; FR-009 gate is the empirical arbiter |
+| R9 | Cause 4 (`ext-1`) + visibility | Second structure-only prune (empty trigger-code sub-extension); surface `transformed` independent of storage |

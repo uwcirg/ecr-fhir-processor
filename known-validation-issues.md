@@ -211,6 +211,45 @@ REMEDIATION: aidbox-cause-2-mrp2-stratum-prune
 
 REMEDIATION: aidbox-cause-3-terminology-unset
 
+### Cause 4 — `ext-1` constraint on an empty trigger-code sub-extension (base FHIR R4 invariant)
+
+- **Aidbox message:** `Invalid constraint result for ID 'ext-1'. Expression:
+  'extension.exists() != value.exists()'. Human-readable message: 'Must have either
+  extensions or value[x], not both'.` at
+  `Composition.section[9].entry[0].extension[0].extension[1]` (schema-id
+  `triggerCodeValueSetVersion`).
+- **Affected:** the eICR Composition of the **depression-screening (CMS2)** message Bundle
+  (`Bundle_06308645-…`), surfacing on both the whole-Bundle PUT and the promoted Composition
+  PUT. Isolated to that fixture — the other three trigger-code Bundles carry a real
+  `triggerCodeValueSetVersion` (`valueString` present) and are unaffected.
+- **Root cause:** the drajer/eCRNow `eicr-trigger-code-flag-extension` carries a
+  `triggerCodeValueSetVersion` sub-extension that is a bare `{"url": …}` shell — **neither a
+  `value[x]` nor nested extensions**. Aidbox's `ext-1` is XOR (`extension.exists() !=
+  value.exists()`), so an element with *neither* side fails it (the "not both" wording is the
+  generic message for the XOR). A genuine **base FHIR R4 invariant violation in supplier
+  data**, not strictness.
+- **Aidbox workaround:** there is **no validation-side lever** — `ext-1` is a base cardinality
+  invariant, not a profile/terminology toggle (`BOX_FHIR_VALIDATOR_STRICT_EXTENSION_RESOLUTION`
+  governs *unknown*-extension resolution, not this). Like Cause 2, this is a Cause with no
+  non-mutating lever, so Principle VIII permits a content transform.
+- **Chosen remediation (Principle VIII — content transform, non-fabricating):** the processor
+  **removes each child sub-extension of an `eicr-trigger-code-flag-extension` that carries
+  neither a `value[x]` nor nested extensions** (`prune_empty_trigger_code_extensions` in
+  `process.py`). A url-only version marker is malformed *structure*, not clinical content —
+  the `triggerCode` and `triggerCodeValueSet` siblings (the actual clinical payload) are
+  preserved, and the transform **only removes, never fabricates** (never invents a version
+  string, per Principle V). It is idempotent, walks message-Bundle → document-Bundle →
+  Composition (so the Bundle is not rejected whole, FR-005; the same in-place walk cleans the
+  promoted Composition, the same object), and runs on the write path before the `output/`
+  mirror so the mirrored bytes equal the PUT bytes (FR-008). The `test/input/` fixtures are
+  never modified. Every removal is logged at WARNING via
+  `log_remediation(REMEDIATION_TRIGGER_CODE_EXT_PRUNE, …)` naming the removed sub-extension
+  (FR-006), so no element is silently dropped. Re-validated through the HL7 gate the
+  transformed output introduces **no new signature** vs. `test/conformance-baseline.sigs`
+  (FR-009).
+
+REMEDIATION: aidbox-cause-4-trigger-code-ext-prune
+
 ### Aidbox config levers (summary)
 
 | Lever | Scope | Silences | Notes |
@@ -218,14 +257,15 @@ REMEDIATION: aidbox-cause-3-terminology-unset
 | `BOX_FHIR_SCHEMA_VALIDATION=false` | box-wide | **DO NOT USE** | Not a validation switch — an engine selector. `false` reverts to the deprecated legacy engine: console warns to migrate, and **every FHIR PUT 404s** (`not found`). Breaks the FHIR API; does not relax validation. FHIR Schema validation is mandatory — always keep `=true`. |
 | `BOX_FHIR_VALIDATION_SKIP_REFERENCE=true` + `aidbox-validation-skip` header | **per-request** | Cause 1 (**confirmed**) | Only per-PUT lever. Sent by the processor via `config.server.validation_skip` (e.g. `["reference"]`). Confirmed 2026-06-12 to also cover target-profile *conformance*, not just existence. |
 | `BOX_FHIR_TERMINOLOGY_SERVICE_BASE_URL` unset | box-wide | Cause 3 | No terminology server ⇒ binding validation skipped. Exact name per [Aidbox settings reference](https://www.health-samurai.io/docs/aidbox/reference/all-settings#fhir-terminology-service-base-url) (note the `BOX_FHIR_` prefix — **not** `AIDBOX_`; the wrong name silently re-enables Cause 3, seen in the 2026-07-02 run). |
-| `BOX_FHIR_VALIDATOR_STRICT_PROFILE_RESOLUTION` / `..._STRICT_EXTENSION_RESOLUTION` | box-wide | — | Default `false`: *unknown* profiles/extensions ignored. Does not help Causes 1–3 (profiles are loaded). |
+| `BOX_FHIR_VALIDATOR_STRICT_PROFILE_RESOLUTION` / `..._STRICT_EXTENSION_RESOLUTION` | box-wide | — | Default `false`: *unknown* profiles/extensions ignored. Does not help Causes 1–4 (profiles/extensions are loaded; `ext-1` is a base cardinality invariant, not a resolution toggle). |
+| _(no lever)_ | — | Cause 4 | Base-FHIR `ext-1` has no per-constraint skip. Cleared by the trigger-code sub-extension prune transform (above), like Cause 2. |
 
 **Key takeaway:** with the schema engine kept **on** (`BOX_FHIR_SCHEMA_VALIDATION=true`,
-mandatory — FR-014), all three causes are cleared in Principle VIII priority order: Causes 1
+mandatory — FR-014), all four causes are cleared in Principle VIII priority order: Causes 1
 and 3 by **non-mutating levers** (reference-skip header; terminology server unset), and
-Cause 2 — the only one with no lever — by the **non-fabricating, structure-only stratum
-prune** documented above. No cause requires disabling the engine or fabricating clinical
-content.
+Causes 2 and 4 — the ones with no lever — by **non-fabricating, structure-only prunes** (the
+stratum prune and the empty trigger-code sub-extension prune) documented above. No cause
+requires disabling the engine or fabricating clinical content.
 
 **Architectural note:** conformance in this project is owned by the HL7 validator gate
 (`scripts/validate.sh` + `test/conformance-baseline.sigs`). Aidbox is the downstream

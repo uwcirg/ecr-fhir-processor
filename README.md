@@ -114,7 +114,7 @@ python3 process.py --input-dir test/input --only-types MeasureReport
 Aidbox's FHIR Schema engine (kept **enabled** — `BOX_FHIR_SCHEMA_VALIDATION=true`) is a
 second validation surface, distinct from the HL7 validator gate. Making every emitted
 resource storable there is done **without fabricating or dropping clinical content**
-(constitution Principle VIII, subordinate to Principle V). The three documented Aidbox
+(constitution Principle VIII, subordinate to Principle V). The four documented Aidbox
 rejection causes are cleared in priority order — non-mutating levers first, a transform
 only where no lever exists (see [`known-validation-issues.md`](known-validation-issues.md)):
 
@@ -137,14 +137,25 @@ only where no lever exists (see [`known-validation-issues.md`](known-validation-
   through the HL7 gate introduces **no new signature** vs. `test/conformance-baseline.sigs`.
   MeasureReports are thus made storable **rather than deferred** — replacing the earlier
   "land MeasureReports in a later run once Aidbox is relaxed" stance.
+- **Cause 4 — base-FHIR `ext-1` invariant** (the CMS2 eICR Composition + its message
+  Bundle). Also no non-mutating lever (`ext-1` is a base cardinality invariant), so a
+  second structure-only transform: the processor **removes each child of an
+  `eicr-trigger-code-flag-extension` that carries neither a `value[x]` nor nested
+  extensions** — in the sample data an empty `triggerCodeValueSetVersion`. The
+  `triggerCode`/`triggerCodeValueSet` siblings (the clinical payload) are preserved and no
+  version is fabricated (non-fabricating, idempotent, runs before the mirror). Every
+  removal is logged at WARNING, and the transformed output introduces **no new** HL7-gate
+  signature.
 
 The FHIR Schema engine stays **enabled** throughout (`BOX_FHIR_SCHEMA_VALIDATION=true`) —
 it is never disabled to force storage (that reverts Aidbox to the deprecated legacy engine
 and breaks the FHIR REST API). Every applied lever/transform is logged at WARNING
 (`[remediation:<key>]`) and documented in `known-validation-issues.md`; an undocumented
 remediation is a defect, enforced by a test. The run reports each FHIR type as
-**stored / remediated / deferred** and exits `0` (all stored) / `1` (unexpected failure) /
-`2` (a type deferred), so operators and CI can branch on the outcome without Aidbox logs.
+**stored / remediated / deferred / transformed** (where `transformed` counts resources a
+content transform touched — visible even if the resource then failed on an independent
+cause) and exits `0` (all stored) / `1` (unexpected failure) / `2` (a type deferred), so
+operators and CI can branch on the outcome without Aidbox logs.
 
 ## Analytics views (`publish_views.py`)
 

@@ -30,9 +30,11 @@ A documented reason Aidbox refuses to store a resource. Each maps to one chosen 
 |-------|---------------|-----------------------|-------------|------------------|
 | **1 — reference target-profile** | 422 `invalid-target-profile` | Observation ×2, MedicationRequest ×1 (+ 2 message Bundles) | Non-mutating lever: `aidbox-validation-skip: reference` header (existing) | **No** |
 | **2 — `mrp-2` base invariant** | 422 constraint `mrp-2` | every MeasureReport (5 standalone + 3 nested) | Content transform: remove value+component-less strata (§4) | **Yes** (structure-only) |
-| **3 — terminology display binding** | 422 `terminology-binding-error` | same MeasureReports | Non-mutating box-side lever: terminology server unset | **No** |
+| **3 — terminology display binding** | 422 `terminology-binding-error` | same MeasureReports | Non-mutating box-side lever: terminology server unset (`BOX_FHIR_TERMINOLOGY_SERVICE_BASE_URL`) | **No** |
+| **4 — `ext-1` empty trigger-code sub-extension** | 422 constraint `ext-1` (`triggerCodeValueSetVersion`) | eICR Composition of the CMS2 message Bundle | Content transform: remove the value/child-less sub-extension (§4b) | **Yes** (structure-only) |
 
-Only Cause 2 has no non-mutating lever, so it is the only content transform (Principle VIII priority).
+Causes 2 and 4 have no non-mutating lever, so they are the only content transforms (Principle VIII
+priority).
 
 ---
 
@@ -41,7 +43,8 @@ Only Cause 2 has no non-mutating lever, so it is the only content transform (Pri
 **Remediation action** — what the processor did to make a resource storable:
 
 - **lever** — a per-request header (Cause 1) or reliance on box-side config (Cause 3); no content change.
-- **transform** — stratum removal (Cause 2); content changed, structure-only, non-fabricating.
+- **transform** — stratum removal (Cause 2) or empty trigger-code sub-extension removal (Cause 4);
+  content changed, structure-only, non-fabricating.
 - **deferral** — resource type isolated because only fabrication could store it (FR-007). *Not
   triggered by the current sample.*
 
@@ -98,6 +101,43 @@ untouched.
 
 ---
 
+## 4b. eICR trigger-code extension transform (Cause 4)
+
+The structure the second transform operates on and its rules. See the transform contract
+([contracts/trigger-code-ext-prune.md](./contracts/trigger-code-ext-prune.md)) for the full spec.
+
+```
+Composition
+└── section[]
+    └── entry[]
+        └── extension[]                              # url = eicr-trigger-code-flag-extension
+            └── extension[]                          # complex-extension children (pruned here)
+                ├── {url: triggerCodeValueSet,        valueString}   # kept (clinical)
+                ├── {url: triggerCodeValueSetVersion}                # <-- url-only shell → removed
+                └── {url: triggerCode,                valueCoding}   # kept (clinical)
+```
+
+**ext-1**: `extension.exists() != value.exists()` (an extension must carry *either* a `value[x]` *or*
+child extensions — a url-only shell that has neither fails the XOR).
+
+**Prune rule** — a child sub-extension of an `eicr-trigger-code-flag-extension` is **removed** iff it
+has **neither** a `value[x]` **nor** nested `extension` entries. A child with a populated `valueString`
+(a real version) is **kept** untouched.
+
+**Preservation invariants** (all must hold; tested):
+
+1. The `triggerCode`/`triggerCodeValueSet` siblings (the clinical payload) are untouched.
+2. Every other element of the resource is untouched; only the empty sub-extension is dropped.
+3. No fabrication — a version string is never invented to "fix" the extension (Principle V).
+4. Idempotent; walks message-Bundle → document-Bundle → Composition (FR-015). The promoted Composition
+   is the same object nested in the Bundle, so one walk cleans both PUTs.
+5. Each removal emits a WARNING naming the removed sub-extension url (FR-006).
+
+> **Scope**: occurs only in the CMS2 message Bundle in the current sample; the other three trigger-code
+> Bundles carry a populated version and are untouched.
+
+---
+
 ## 5. Storability outcome & exit-code model
 
 Extends the existing `FileOutcome`/`RunSummary`/`exit_code` (`fhir_common.py:58–94`).
@@ -113,15 +153,22 @@ Extends the existing `FileOutcome`/`RunSummary`/`exit_code` (`fhir_common.py:58�
 | `skipped` | excluded by type filter / unreadable / unrecognized (unchanged) | — |
 
 > Cause 1 lever-only submissions may be reported as `succeeded` or `remediated` per the contract in
-> [contracts/run-accounting.md](./contracts/run-accounting.md); the transform (Cause 2) is always
-> `remediated`.
+> [contracts/run-accounting.md](./contracts/run-accounting.md); a Cause 2/Cause 4 transform on a stored
+> resource is always `remediated`.
 
-### Per-type summary (FR-012, SC-006)
+**`remediations_applied` / `transformed` (FR-016)** — orthogonal to `status`: `FileOutcome`
+accumulates `remediations_applied` (elements removed by a transform) **regardless of whether the PUT
+stored**, and `RunSummary.transformed` counts units with `remediations_applied > 0`. This keeps a
+successful transform visible even when the resource later `failed` on an independent cause (e.g. a
+still-active Cause 3 binding), instead of vanishing behind `remediated == 0`. Invariant:
+`transformed >= remediated`; `transformed` never affects the exit code.
 
-The run summary (`_report_summary`, `process.py:791`) already stratifies by FHIR type; extend the
-per-type row to report **stored / remediated / deferred** (in addition to the existing
-succeeded/failed/skipped), so an operator reads the outcome from the run's own summary without Aidbox
-server logs.
+### Per-type summary (FR-012, FR-016, SC-006)
+
+The run summary (`_report_summary`) already stratifies by FHIR type; extend the per-type row to report
+**stored / remediated / deferred / transformed** (in addition to the existing
+succeeded/failed/skipped), so an operator reads the outcome — including transforms that ran but did not
+store — from the run's own summary without Aidbox server logs.
 
 ### Exit-code state machine (FR-012)
 

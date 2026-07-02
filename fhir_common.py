@@ -69,8 +69,12 @@ REMEDIATION_REFERENCE_SKIP = "aidbox-cause-1-reference-skip"
 #: server unset (no content change).
 REMEDIATION_TERMINOLOGY_UNSET = "aidbox-cause-3-terminology-unset"
 #: Cause 2 — base-FHIR `mrp-2` invariant, cleared by the stratum-prune transform
-#: (structure-only content change; the only content transform).
+#: (structure-only content change).
 REMEDIATION_MRP2_STRATUM_PRUNE = "aidbox-cause-2-mrp2-stratum-prune"
+#: Cause 4 — base-FHIR `ext-1` invariant on an empty `triggerCodeValueSetVersion`
+#: sub-extension of the eICR trigger-code-flag extension, cleared by removing the
+#: value/child-less sub-extension (structure-only content change; non-fabricating).
+REMEDIATION_TRIGGER_CODE_EXT_PRUNE = "aidbox-cause-4-trigger-code-ext-prune"
 
 #: The complete set of remediation keys. Every applied lever/transform logs one of these
 #: via :func:`log_remediation`, and each has a matching `REMEDIATION: <key>` marker line
@@ -79,6 +83,7 @@ REMEDIATIONS = frozenset({
     REMEDIATION_REFERENCE_SKIP,
     REMEDIATION_TERMINOLOGY_UNSET,
     REMEDIATION_MRP2_STRATUM_PRUNE,
+    REMEDIATION_TRIGGER_CODE_EXT_PRUNE,
 })
 
 
@@ -121,6 +126,11 @@ class FileOutcome:
     status: str  # succeeded | remediated | deferred | failed | skipped (data-model §5)
     detail: str = ""
     resource_type: str | None = None  # FHIR type; derived from `action` for submissions
+    #: Count of elements removed by content transforms applied to this unit (mrp-2 strata +
+    #: empty trigger-code sub-extensions), recorded REGARDLESS of the final PUT result. Lets
+    #: the summary surface a transform that ran even when the resource FAILED on an
+    #: independent cause, so successful remediation is never invisible (data-model §5).
+    remediations_applied: int = 0
 
     def __post_init__(self) -> None:
         # Submission actions are "PUT <Type>/<id>"; file-level skip/error actions
@@ -141,6 +151,10 @@ class RunSummary:
     deferred: int = 0
     failed: int = 0
     skipped: int = 0
+    #: Count of units that had at least one content transform applied, INDEPENDENT of
+    #: whether the unit was ultimately stored. `transformed >= remediated` (a `remediated`
+    #: unit is a transformed unit that also stored). Reported, never affects the exit code.
+    transformed: int = 0
     outcomes: list[FileOutcome] = field(default_factory=list)
 
     def record(self, outcome: FileOutcome) -> None:

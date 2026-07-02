@@ -197,20 +197,35 @@ duplicates and no diffs for already-stored resources.
   documented there is a defect.
 - **FR-014**: The processor MUST NOT rely on disabling the Aidbox FHIR Schema validation engine to
   achieve storability; runs assume the schema engine remains enabled.
+- **FR-015**: For the `ext-1` base-invariant rejection (Cause 4), the processor MUST remove each child
+  sub-extension of an eICR `eicr-trigger-code-flag-extension` that carries neither a `value[x]` nor
+  nested extensions (a url-only shell — in the sample data an empty `triggerCodeValueSetVersion`), and
+  MUST leave the `triggerCode`/`triggerCodeValueSet` siblings and every other element unchanged. It
+  MUST NOT fabricate a version value (Principle V). Like FR-005 this pruning MUST apply wherever such
+  an extension is persisted — the promoted eICR Composition and every copy nested inside a persisted
+  message/document Bundle — so the Bundle is not rejected as a whole. Every removal MUST be logged at
+  WARNING naming the removed sub-extension (FR-006).
+- **FR-016**: The run summary MUST surface that a content transform was applied to a resource
+  **independently of whether that resource was ultimately stored** — so a transform that ran but whose
+  resource then failed on an unrelated cause is not reported as though no remediation occurred. The
+  `stored`/`remediated` counts continue to mean stored-via-remediation; a separate per-type and total
+  `transformed` count reports transforms applied regardless of storage outcome, and does not affect the
+  exit code.
 
 ### Key Entities *(include if feature involves data)*
 
 - **Emitted resource**: a FHIR resource on its way to the Aidbox server; the unit that is stored,
   remediated, or deferred. Carries a resource type and a retained id used for idempotent update.
 - **Aidbox rejection cause**: a documented reason Aidbox refuses to store a resource (reference
-  target-profile conformance, `mrp-2` invariant, terminology display mismatch). Each maps to a chosen
-  remediation strategy.
+  target-profile conformance, `mrp-2` invariant, terminology display mismatch, `ext-1` empty
+  trigger-code sub-extension). Each maps to a chosen remediation strategy.
 - **Remediation action**: what the processor did to make a resource storable — a non-mutating lever
-  (request header / reliance on server config) or a content transform (stratum removal) or a deferral.
+  (request header / reliance on server config) or a content transform (stratum removal, empty
+  trigger-code sub-extension removal) or a deferral.
 - **Remediation record**: the runtime log entry plus the `known-validation-issues.md` documentation
   describing an applied remediation, including any clinical counts a transform removed.
-- **Storability outcome**: per resource (and aggregated per type) — stored, remediated-then-stored, or
-  deferred — surfaced in the run summary and exit status.
+- **Storability outcome**: per resource (and aggregated per type) — stored, remediated-then-stored,
+  transformed-but-not-stored, or deferred — surfaced in the run summary and exit status.
 
 ## Success Criteria *(mandatory)*
 

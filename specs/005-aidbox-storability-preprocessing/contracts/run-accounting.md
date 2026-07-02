@@ -11,15 +11,29 @@ Existing: `succeeded | failed | skipped`. Add: **`remediated`**, **`deferred`**.
 | Status | When | Storability meaning |
 |--------|------|---------------------|
 | `succeeded` | stored, no transform applied | stored (untouched) |
-| `remediated` | stored after a content transform (Cause 2 stratum prune) was applied | stored (remediated) |
+| `remediated` | stored after a content transform (Cause 2 stratum prune and/or Cause 4 trigger-code sub-extension prune) was applied | stored (remediated) |
 | `deferred` | resource type isolated: only fabrication could store it (FR-007); not submitted | not stored, by design |
 | `failed` | non-2xx / transport error for a **not-yet-documented** cause | unexpected error |
 | `skipped` | type-filter exclusion / unreadable / unrecognized (unchanged) | n/a |
 
 > A Cause-1 lever-only PUT (reference-skip header) MAY be reported `succeeded` (its content was not
-> changed). The mrp-2 transform is always `remediated`. The distinction the run must preserve is
-> **stored vs. deferred vs. unexpected-error**; `remediated` is the reportable subset of stored that
-> required a transform (SC-003, SC-006).
+> changed). A Cause-2/Cause-4 transform on a stored resource is always `remediated`. The distinction
+> the run must preserve is **stored vs. deferred vs. unexpected-error**; `remediated` is the reportable
+> subset of stored that required a transform (SC-003, SC-006).
+
+### `remediations_applied` / `transformed` — transform visibility independent of storage (FR-016)
+
+`status` conflates "a transform ran" with "the resource stored": a resource whose transform ran but
+which then **failed** on an independent cause (e.g. a still-active Cause 3 terminology binding) stays
+`failed`, so `remediated` alone would report `0` and the successful transform would be invisible. To
+prevent that:
+
+- `FileOutcome` gains **`remediations_applied: int`** — the element-removal count recorded by
+  `_record_remediation` **regardless of the PUT result** (a `succeeded` outcome is additionally
+  promoted to `remediated`; a `failed` one keeps `failed` but still carries the count + a detail note).
+- `RunSummary` gains **`transformed: int`** — the number of units with `remediations_applied > 0`,
+  independent of storage. Invariant: `transformed >= remediated`.
+- `transformed` does **not** affect the exit code.
 
 ## Remediation logging & documentation audit (FR-013)
 
@@ -36,10 +50,11 @@ registry ⊆ documented, so "an undocumented remediation is a defect" is a deter
 
 ## `RunSummary` additions
 
-- Track `remediated: int` and `deferred: int` counts (alongside succeeded/failed/skipped).
-- Per-type stratification (`by_type` in `_report_summary`) gains `remediated` and `deferred` columns,
-  so each resource-type row reads: submitted / succeeded / **remediated** / failed / **deferred** /
-  skipped (FR-012, SC-006).
+- Track `remediated: int`, `deferred: int`, and `transformed: int` counts (alongside
+  succeeded/failed/skipped).
+- Per-type stratification (`by_type` in `_report_summary`) gains `remediated`, `deferred`, and
+  `transformed` columns, so each resource-type row reads: submitted / succeeded / **remediated** /
+  failed / **deferred** / skipped / **transformed** (FR-012, FR-016, SC-006).
 
 ## Exit-code contract (replaces `0 if failed==0 else 1`)
 
@@ -70,3 +85,7 @@ Rules:
    (assert via `assertLogs`).
 5. **Idempotent re-run** ⇒ a second run over already-stored resources produces no duplicates and no
    content diffs; exit `0` (FR-010, SC-004).
+6. **Transform visible when the PUT fails** (FR-016) ⇒ `_record_remediation` on a `failed` outcome
+   leaves `status == "failed"` but sets `remediations_applied > 0` and keeps the original failure
+   detail; `_report_summary` reports `transformed > 0` (per-type and total) while `remediated` may be
+   `0`. A `succeeded` outcome is instead promoted to `remediated` (assert via `assertLogs`).

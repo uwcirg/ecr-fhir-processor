@@ -125,6 +125,54 @@ Single-project CLI at repo root: entry points `process.py` / `publish_views.py` 
 
 ---
 
+## Phase 7: 2026-07-02 Amendment — Cause 4 (`ext-1`) + transform visibility
+
+*Triggered by the first live run (`log/…101340.log`): a fourth rejection cause, and a run-accounting
+gap where the working Cause-2 prune was invisible because the resources then failed on a re-enabled
+Cause 3 (mis-set `BOX_FHIR_TERMINOLOGY_SERVICE_BASE_URL`). See research.md R9; spec FR-015/FR-016.*
+
+- [X] T023 Fix the Cause 3 env-var name across the repo — `AIDBOX_TERMINOLOGY_SERVICE_BASE_URL` →
+  `BOX_FHIR_TERMINOLOGY_SERVICE_BASE_URL` (README, known-validation-issues.md, plan/research/quickstart)
+  — and cite the Aidbox settings reference so the wrong name (which silently re-enables Cause 3) does
+  not regress.
+- [X] T024 [US2] Create `tests/test_trigger_code_ext_prune.py` covering the Cause 4 transform contract
+  (contracts/trigger-code-ext-prune.md C1–C7): removes only the value/child-less sub-extension; keeps a
+  populated version; preserves `triggerCode`/`triggerCodeValueSet`; no-op without the flag extension;
+  idempotent; WARNING names the removed sub-extension; nested-in-message-Bundle walk. Write FIRST.
+- [X] T025 [US2] Add `REMEDIATION_TRIGGER_CODE_EXT_PRUNE` (`"aidbox-cause-4-trigger-code-ext-prune"`) to
+  the `REMEDIATIONS` registry in `fhir_common.py` (audited by T019).
+- [X] T026 [US2] Implement `prune_empty_trigger_code_extensions(node, source_filename) -> int` in
+  `process.py`: recursively remove each child of an `eicr-trigger-code-flag-extension` that carries
+  neither a `value[x]` nor nested extensions; preserve the clinical siblings; never fabricate; log each
+  removal via `log_remediation(REMEDIATION_TRIGGER_CODE_EXT_PRUNE, …)` (FR-015, FR-006, contract C1–C8).
+- [X] T027 [US2] Wire the Cause 4 prune into `Pipeline._process_message` **before** `_maybe_mirror(...)`
+  and the whole-Bundle PUT (the promoted Composition is the same object, so one walk cleans both PUTs)
+  (FR-015, FR-008, contract C7/C8).
+- [X] T028 [US2] Reconcile the `known-validation-issues.md` Aidbox section: add the Cause 4 subsection +
+  `REMEDIATION: aidbox-cause-4-trigger-code-ext-prune` marker, update the config-levers table (Cause 4
+  has no lever) and the "Key takeaway" (four causes) (FR-013).
+- [X] T029 [US3] Surface transforms independent of storage (FR-016): add
+  `FileOutcome.remediations_applied` and `RunSummary.transformed`; replace `_mark_remediated` with
+  `_record_remediation` (records the transform + note regardless of PUT result; promotes to
+  `remediated` only when stored); increment `summary.transformed` in `run()`; add a `transformed`
+  column to the per-type + totals lines in `_report_summary`. Extend `tests/test_summary.py`
+  (`_record_remediation` succeeded/failed/zero/accumulate; `transformed` per-type + totals).
+- [X] T030 Update spec 005 artifacts: spec.md (FR-015/FR-016, Key Entities), plan.md (four levers, file
+  lists), data-model.md (§2 Cause 4 row, §4b transform, §5 `transformed`), contracts
+  (trigger-code-ext-prune.md new; run-accounting.md `transformed`), research.md R9, README.md (Cause 4 +
+  `transformed`).
+- [X] T031 Run `ruff check .` and the full `python -m unittest` suite (138 tests green); full `--dry-run`
+  over `test/input` shows the Cause 4 prune fires once (CMS2), `transformed` per-type
+  (MeasureReport=7 / Bundle=4 / Composition=1), `exit_code=0`.
+- [ ] T032 **[BLOCKED — requires live Aidbox + credentials; operator action]** Re-run T022's quickstart
+  against a clean box with `BOX_FHIR_TERMINOLOGY_SERVICE_BASE_URL` **unset**: confirm the 7 Measure
+  reports + 4 message Bundles + CMS2 Composition now store (Causes 2–4 all cleared), and that a run
+  against a box with the terminology server **set** instead reports `failed>0` **and** `transformed>0`
+  (FR-016 visibility) rather than a silent `remediated=0`. Re-validate the HL7 no-regression gate
+  (FR-009) over the transformed `output/` including the newly-pruned CMS2 Composition.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

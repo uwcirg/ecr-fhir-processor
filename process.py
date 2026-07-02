@@ -32,6 +32,7 @@ from fhir_common import (  # noqa: F401  (re-exported for tests/back-compat)
     REMEDIATION_MRP2_STRATUM_PRUNE,
     REMEDIATION_REFERENCE_SKIP,
     REMEDIATION_TERMINOLOGY_UNSET,
+    REMEDIATION_TRIGGER_CODE_EXT_PRUNE,
     REMEDIATIONS,
     REQUIRED_SERVER_FIELDS,
     FhirClient,
@@ -379,6 +380,79 @@ def prune_nested_measurereports(bundle: dict, source_filename: str) -> int:
     return total
 
 
+# --------------------------------------------------------------------------- #
+# eICR trigger-code empty-sub-extension prune (Cause 4 — base-FHIR ext-1, US2;
+# contracts/trigger-code-ext-prune.md, Principle VIII/V)
+# --------------------------------------------------------------------------- #
+
+#: The eICR complex extension whose `triggerCodeValueSetVersion` child can arrive as a
+#: bare `{"url": ...}` shell (no `valueString`), violating base-FHIR `ext-1`.
+TRIGGER_CODE_FLAG_EXTENSION_URL = (
+    "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-trigger-code-flag-extension"
+)
+
+
+def _extension_carries_nothing(ext: dict) -> bool:
+    """True iff ``ext`` has neither a ``value[x]`` nor child ``extension`` entries.
+
+    Base-FHIR ``ext-1`` requires ``extension.exists() != value.exists()`` — an extension
+    that is a url-only shell (neither side present) violates it and carries no content.
+    """
+    has_children = bool(ext.get("extension"))
+    has_value = any(key.startswith("value") for key in ext)
+    return not has_children and not has_value
+
+
+def prune_empty_trigger_code_extensions(node: object, source_filename: str) -> int:
+    """Remove url-only children of every eICR trigger-code-flag extension (Cause 4, ext-1).
+
+    Recursively walks ``node`` (a message Bundle, its nested document Bundle, and the
+    Composition sections within) and, for each ``eicr-trigger-code-flag-extension``, drops
+    any child sub-extension that carries neither a ``value[x]`` nor nested ``extension``
+    (contract C1) — in the sample data this is an empty ``triggerCodeValueSetVersion``. The
+    ``triggerCode`` and ``triggerCodeValueSet`` siblings (the only clinical content) are
+    preserved (C2); every other element is unchanged (C3). Structure-only and
+    non-fabricating: it MUST NOT invent a version string (Principle V, C4). Mutates in
+    place; returns the number of sub-extensions removed. Idempotent (C5). Each removal logs
+    a WARNING via ``log_remediation`` naming the removed sub-extension url (C6, FR-006).
+    """
+    removed = 0
+    if isinstance(node, dict):
+        exts = node.get("extension")
+        if isinstance(exts, list):
+            for ext in exts:
+                if not (isinstance(ext, dict)
+                        and ext.get("url") == TRIGGER_CODE_FLAG_EXTENSION_URL):
+                    continue
+                children = ext.get("extension")
+                if not isinstance(children, list):
+                    continue
+                kept = [c for c in children
+                        if not (isinstance(c, dict) and _extension_carries_nothing(c))]
+                if len(kept) == len(children):
+                    continue
+                for child in children:
+                    if isinstance(child, dict) and _extension_carries_nothing(child):
+                        removed += 1
+                        log_remediation(
+                            REMEDIATION_TRIGGER_CODE_EXT_PRUNE,
+                            "Removed value/child-less trigger-code sub-extension %r "
+                            "(base-FHIR ext-1) from %s",
+                            child.get("url"), source_filename,
+                        )
+                # A trigger-code-flag extension always retains its `triggerCode` /
+                # `triggerCodeValueSet` children here, so `kept` is non-empty and the flag
+                # extension itself stays ext-1-valid (has children). We never delete the
+                # flag extension or fabricate a value.
+                ext["extension"] = kept
+        for value in node.values():
+            removed += prune_empty_trigger_code_extensions(value, source_filename)
+    elif isinstance(node, list):
+        for item in node:
+            removed += prune_empty_trigger_code_extensions(item, source_filename)
+    return removed
+
+
 def extract_eicr_composition(message_bundle: dict) -> dict | None:
     """Extract the eICR ``Composition`` nested in the message Bundle's document Bundle.
 
@@ -633,18 +707,24 @@ def mirror_output(output_dir: str, measure: str | None, run_date: str,
 # --------------------------------------------------------------------------- #
 
 
-def _mark_remediated(outcome: FileOutcome, removed: int) -> None:
-    """Reclassify a stored outcome as ``remediated`` after a content transform (US2).
+def _record_remediation(outcome: FileOutcome, removed: int, note: str) -> None:
+    """Record a content transform on ``outcome``, INDEPENDENT of the PUT result (US2).
 
-    Only a ``succeeded`` (stored) outcome is promoted to ``remediated`` — a ``failed`` PUT
-    is left as the more urgent signal, and a ``skipped``/``deferred`` unit was never stored.
-    ``remediated`` counts as stored but is reported separately so an operator sees which
-    resources required a transform (data-model §5, contracts/run-accounting.md).
+    Always accumulates ``remediations_applied`` and appends ``note`` to the detail, so a
+    transform that ran is visible even when the resource ultimately ``failed`` on an
+    independent cause (Gap 3 fix — the successful transform is no longer invisible in the
+    summary). Only a ``succeeded`` (stored) outcome is additionally promoted to
+    ``remediated`` — a ``failed`` PUT keeps that more-urgent status, and a
+    ``skipped``/``deferred`` unit was never stored. ``remediated`` still means
+    stored-via-transform; ``remediations_applied``/``RunSummary.transformed`` mean
+    transform-applied regardless of storage (data-model §5, contracts/run-accounting.md).
     """
+    if removed <= 0:
+        return
+    outcome.remediations_applied += removed
+    outcome.detail = f"{outcome.detail}; {note}" if outcome.detail else note
     if outcome.status == "succeeded":
         outcome.status = "remediated"
-        note = f"remediated: pruned {removed} mrp-2 stratum(s)"
-        outcome.detail = f"{outcome.detail}; {note}" if outcome.detail else note
 
 
 @dataclass
@@ -772,8 +852,7 @@ class Pipeline:
         self._maybe_mirror(measure, source_filename, report)
         outcome = self._guarded_put(KIND_MEASURE_REPORT, "MeasureReport",
                                     report.get("id"), report, source_filename)
-        if removed:
-            _mark_remediated(outcome, removed)
+        _record_remediation(outcome, removed, f"pruned {removed} mrp-2 stratum(s)")
         return [outcome]
 
     def _process_message(self, bundle: dict, source_filename: str,
@@ -787,22 +866,33 @@ class Pipeline:
         if composition is not None:
             self._stamp(composition, source_filename)
             warn_unresolved_composition_refs(composition, document_resource_keys(bundle))
-        # Cause 2 transform for MeasureReports nested inside this message/document Bundle,
-        # BEFORE the mirror + whole-Bundle PUT, so the Bundle is not rejected whole for an
-        # unpruned nested MeasureReport (FR-005) and output/ bytes equal the PUT bytes (C8).
-        removed = prune_nested_measurereports(bundle, source_filename)
+        # Cause 2 (mrp-2 strata) and Cause 4 (empty trigger-code sub-extensions) transforms
+        # for content nested inside this message/document Bundle, BEFORE the mirror +
+        # whole-Bundle PUT, so the Bundle is not rejected whole for an unpruned nested
+        # MeasureReport (FR-005) or a malformed trigger-code extension, and output/ bytes
+        # equal the PUT bytes (C8). Trigger-code flag extensions live only in the promoted
+        # Composition (the same object nested in the document Bundle), so the single
+        # in-place walk over `bundle` also cleans the standalone Composition PUT below.
+        removed_mrp2 = prune_nested_measurereports(bundle, source_filename)
+        removed_tc = prune_empty_trigger_code_extensions(bundle, source_filename)
         self._maybe_mirror(measure, source_filename, bundle)
 
         outcomes = [self._guarded_put(KIND_MESSAGE, "Bundle", bundle.get("id"),
                                       bundle, source_filename)]
-        if removed:
-            _mark_remediated(outcomes[0], removed)
+        _record_remediation(outcomes[0], removed_mrp2,
+                            f"pruned {removed_mrp2} mrp-2 stratum(s)")
+        _record_remediation(outcomes[0], removed_tc,
+                            f"removed {removed_tc} empty trigger-code extension(s)")
         if composition is not None:
             # The Composition's per-case GUID is collision-safe (D4b); persist it as its
-            # own first-class outcome in addition to the message Bundle.
-            outcomes.append(self._guarded_put(KIND_MESSAGE, "Composition",
-                                              composition.get("id"), composition,
-                                              source_filename))
+            # own first-class outcome in addition to the message Bundle. It was cleaned by
+            # the same trigger-code walk above (same object), so attribute that removal here.
+            comp_outcome = self._guarded_put(KIND_MESSAGE, "Composition",
+                                             composition.get("id"), composition,
+                                             source_filename)
+            _record_remediation(comp_outcome, removed_tc,
+                                f"removed {removed_tc} empty trigger-code extension(s)")
+            outcomes.append(comp_outcome)
         else:
             logger.warning("No eICR Composition found to promote in %s (D2b).",
                            source_filename)
@@ -918,6 +1008,11 @@ def run(args: argparse.Namespace) -> int:
 
         for outcome in outcomes:
             summary.record(outcome)
+            if outcome.remediations_applied:
+                # A content transform ran on this unit, regardless of whether it stored —
+                # surfaces the transform even when the PUT later failed on another cause
+                # (Gap 3). `transformed >= remediated`; never affects the exit code.
+                summary.transformed += 1
             if outcome.status == "succeeded":
                 summary.succeeded += 1
                 summary.submitted += 1
@@ -957,29 +1052,34 @@ def _report_summary(summary: RunSummary, dry_run: bool) -> None:
             continue
         counts = by_type.setdefault(
             o.resource_type,
-            {"succeeded": 0, "remediated": 0, "deferred": 0, "failed": 0, "skipped": 0})
+            {"succeeded": 0, "remediated": 0, "deferred": 0, "failed": 0, "skipped": 0,
+             "transformed": 0})
         if o.status in counts:
             counts[o.status] += 1
+        if o.remediations_applied:
+            # Orthogonal to status: a transform ran on this unit whether or not it stored.
+            counts["transformed"] += 1
 
     if by_type:
         logger.info("-" * 60)
-        logger.info("resources by type "
-                    "(stored = succeeded + remediated; deferred = not submitted):")
+        logger.info("resources by type (stored = succeeded + remediated; deferred = not "
+                    "submitted; transformed = a content transform ran, stored or not):")
         for rtype in sorted(by_type):
             c = by_type[rtype]
             # submitted = every unit actually PUT; deferred/skipped were not submitted.
             submitted = c["succeeded"] + c["remediated"] + c["failed"]
             logger.info(
                 "  %-18s submitted=%-3d succeeded=%-3d remediated=%-3d failed=%-3d "
-                "deferred=%-3d skipped=%-3d",
+                "deferred=%-3d skipped=%-3d transformed=%-3d",
                 rtype, submitted, c["succeeded"], c["remediated"], c["failed"],
-                c["deferred"], c["skipped"])
+                c["deferred"], c["skipped"], c["transformed"])
 
     logger.info("-" * 60)
     logger.info("read=%d input-files | resources: submitted=%d succeeded=%d "
-                "remediated=%d failed=%d deferred=%d skipped=%d",
+                "remediated=%d failed=%d deferred=%d skipped=%d transformed=%d",
                 summary.read, summary.submitted, summary.succeeded,
-                summary.remediated, summary.failed, summary.deferred, summary.skipped)
+                summary.remediated, summary.failed, summary.deferred, summary.skipped,
+                summary.transformed)
     logger.info("exit_code=%d (%s)", summary.exit_code, _exit_code_meaning(summary.exit_code))
     logger.info("=" * 60)
 

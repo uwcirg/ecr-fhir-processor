@@ -12,7 +12,11 @@ for the outcome model, and the contracts for exact rules.
 - A reachable **Aidbox** with the **FHIR Schema engine enabled** (`BOX_FHIR_SCHEMA_VALIDATION=true`,
   FR-014) and, for the two non-mutating levers:
   - `BOX_FHIR_VALIDATION_SKIP_REFERENCE=true` (enables the Cause-1 per-request header), and
-  - `BOX_FHIR_TERMINOLOGY_SERVICE_BASE_URL` **unset** (Cause 3 binding validation off).
+  - `BOX_FHIR_TERMINOLOGY_SERVICE_BASE_URL` **unset** (Cause 3 binding validation off). ⚠️ The prefix
+    is `BOX_FHIR_` — **not** `AIDBOX_`; the wrong name leaves the terminology server active and
+    silently re-enables Cause 3 (seen in the 2026-07-02 run, where every MeasureReport then failed on
+    `improvementNotation` despite the prune running). Causes 2 and 4 (transforms) do not depend on box
+    config.
 - `config.json` copied from `config.example.json` with real `server` credentials and
   **`"validation_skip": ["reference"]`** (Cause 1 lever).
 
@@ -20,11 +24,13 @@ for the outcome model, and the contracts for exact rules.
 
 ```bash
 ruff check .
-python -m unittest tests.test_stratum_prune tests.test_exit_codes tests.test_summary -v
+python -m unittest tests.test_stratum_prune tests.test_trigger_code_ext_prune \
+  tests.test_exit_codes tests.test_summary -v
 ```
 
-Expected: pruning invariants/idempotency/nested-walk/WARNING-with-counts pass; the three-state exit
-code and per-type stored/remediated/deferred counts pass.
+Expected: both prune transforms' invariants/idempotency/nested-walk/WARNING pass; the three-state exit
+code and per-type stored/remediated/deferred/transformed counts pass (including a transform recorded on
+a `failed` outcome — FR-016).
 
 ## 2. Transform on the write path, output == submitted bytes (FR-008)
 
@@ -34,9 +40,13 @@ python process.py --dry-run --input-dir test/input --output-dir output
 
 Expected: for each MeasureReport (standalone and nested in a message Bundle) that had a
 `population`-only stratum, a **WARNING** logs the removal **with the population counts it carried**
-(FR-006). The mirrored files under `output/{measure}/{date}/` are the transformed resources — the same
-bytes that will be PUT (inspect one MeasureReport to confirm the malformed stratum is gone and nothing
-else changed). `test/input/` is untouched (FR-008, Principle III).
+(FR-006); and for the CMS2 message Bundle, a **WARNING** logs removal of the empty
+`triggerCodeValueSetVersion` sub-extension (Cause 4, FR-015). The per-type summary reports
+`transformed` (e.g. `MeasureReport … transformed=7`, `Bundle … transformed=4`,
+`Composition … transformed=1`). The mirrored files under `output/{measure}/{date}/` are the transformed
+resources — the same bytes that will be PUT (inspect the CMS2 Composition to confirm the empty
+sub-extension is gone and the `triggerCode`/`triggerCodeValueSet` siblings remain). `test/input/` is
+untouched (FR-008, Principle III).
 
 ## 3. HL7 no-regression gate (FR-009, SC-005)
 

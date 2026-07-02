@@ -78,6 +78,23 @@ class ValidationSkipHeaderTest(unittest.TestCase):
         req = self._put(self._client([]))
         self.assertIsNone(req.get_header(_SKIP_HEADER))
 
+    def test_lever_does_not_mutate_resource_content(self):
+        # The Cause-1 reference-skip lever is non-mutating (FR-003): enabling it changes
+        # only the request header, never the submitted resource. Submitting the same dict
+        # with the lever on vs. off must leave the dict byte-identical (deep-equal).
+        import copy
+
+        resource = {
+            "resourceType": "Observation",
+            "id": "abc",
+            "status": "final",
+            "code": {"text": "x"},
+            "meta": {"tag": [{"system": "s", "code": "c"}]},
+        }
+        baseline = copy.deepcopy(resource)
+        self._client(["reference"]).submit_put("Observation", "abc", resource)
+        self.assertEqual(resource, baseline)  # lever mutated nothing
+
 
 if __name__ == "__main__":
     unittest.main()

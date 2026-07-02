@@ -25,7 +25,14 @@ from pathlib import Path
 # available as process.<name> for the existing test suite.
 from fhir_common import (  # noqa: F401  (re-exported for tests/back-compat)
     DEFAULT_PATHS,
+    EXIT_COMPLETED_WITH_DEFERRALS,
+    EXIT_SUCCESS,
+    EXIT_UNEXPECTED_ERROR,
     PLACEHOLDER_PREFIX,
+    REMEDIATION_MRP2_STRATUM_PRUNE,
+    REMEDIATION_REFERENCE_SKIP,
+    REMEDIATION_TERMINOLOGY_UNSET,
+    REMEDIATIONS,
     REQUIRED_SERVER_FIELDS,
     FhirClient,
     FileOutcome,
@@ -33,6 +40,7 @@ from fhir_common import (  # noqa: F401  (re-exported for tests/back-compat)
     RunSummary,
     SubmissionError,
     load_config,
+    log_remediation,
     logger,
     setup_logging,
     validate_config,
@@ -274,6 +282,101 @@ def plan_collection_puts(bundle: dict) -> list[PutUnit]:
             )
         units.append(PutUnit(rtype, rid, resource))
     return units
+
+
+# --------------------------------------------------------------------------- #
+# MeasureReport mrp-2 stratum prune (Cause 2 — the only content transform, US2;
+# contracts/stratum-prune.md, Principle VIII/V)
+# --------------------------------------------------------------------------- #
+
+
+def _summarize_stratum_populations(stratum: dict) -> str:
+    """Render a removed stratum's population counts for the audit WARNING (FR-006).
+
+    Each population is ``<code>=<count>`` (code from the first `population.code.coding`
+    with a code, else `code.text`), so the drop is never silent — the counts it carried
+    are captured in the log (contract C6, SC-003).
+    """
+    parts: list[str] = []
+    for pop in stratum.get("population", []) or []:
+        code = pop.get("code", {}) or {}
+        label = None
+        for coding in code.get("coding", []) or []:
+            if coding.get("code"):
+                label = coding["code"]
+                break
+        if label is None:
+            label = code.get("text", "?")
+        parts.append(f"{label}={pop.get('count')}")
+    return ", ".join(parts) if parts else "(no populations)"
+
+
+def prune_measurereport_strata(report: dict, source_filename: str) -> int:
+    """Remove every stratifier stratum lacking both ``value`` and ``component`` (mrp-2).
+
+    Mutates ``report`` in place; returns the number of strata removed. A stratum is
+    removed **iff** ``value is None and not component`` (contract C1) — a stratum with
+    ``value`` xor ``component`` is left untouched (C2). Every other element of the
+    MeasureReport is unchanged (C3); empty stratum/stratifier/group arrays are left in
+    place (C4 — the transform removes strata, never stratifiers). Idempotent (C5). Never
+    fabricates — it only removes (C9). Each removal logs a WARNING via ``log_remediation``
+    carrying the removed stratum's population counts (C6, FR-006).
+    """
+    removed = 0
+    for group in report.get("group", []) or []:
+        for stratifier in group.get("stratifier", []) or []:
+            strata = stratifier.get("stratum")
+            if not isinstance(strata, list):
+                continue
+            kept = []
+            for stratum in strata:
+                if stratum.get("value") is None and not stratum.get("component"):
+                    removed += 1
+                    log_remediation(
+                        REMEDIATION_MRP2_STRATUM_PRUNE,
+                        "Removed value/component-less MeasureReport stratum "
+                        "(base-FHIR mrp-2) from %s; carried populations: %s",
+                        source_filename, _summarize_stratum_populations(stratum),
+                    )
+                else:
+                    kept.append(stratum)
+            # Only touch the stratifier when something was removed, so a clean stratifier
+            # stays byte-identical (C3, C5 idempotency). When the removal empties the list,
+            # DELETE the `stratum` property rather than leaving `[]`: an empty array is
+            # itself a base-FHIR violation ("Array cannot be empty — the property should
+            # not be present if it has no values"), which would introduce a new HL7-gate
+            # signature (FR-009). A stratifier with no `stratum` satisfies mrp-2 vacuously.
+            if len(kept) != len(strata):
+                if kept:
+                    stratifier["stratum"] = kept
+                else:
+                    del stratifier["stratum"]
+    return removed
+
+
+def prune_nested_measurereports(bundle: dict, source_filename: str) -> int:
+    """Apply :func:`prune_measurereport_strata` to every MeasureReport in ``bundle``.
+
+    Walks ``bundle.entry[*].resource``, recursing into nested Bundles (e.g. the eICR
+    document Bundle inside a message Bundle), so a message Bundle carrying an unpruned
+    MeasureReport is not rejected whole (contract C7, FR-005). Returns total strata removed.
+    """
+    total = 0
+
+    def walk(node: dict) -> None:
+        nonlocal total
+        for entry in node.get("entry", []) or []:
+            resource = entry.get("resource")
+            if not isinstance(resource, dict):
+                continue
+            rtype = resource.get("resourceType")
+            if rtype == "MeasureReport":
+                total += prune_measurereport_strata(resource, source_filename)
+            elif rtype == "Bundle":
+                walk(resource)
+
+    walk(bundle)
+    return total
 
 
 def extract_eicr_composition(message_bundle: dict) -> dict | None:
@@ -530,6 +633,20 @@ def mirror_output(output_dir: str, measure: str | None, run_date: str,
 # --------------------------------------------------------------------------- #
 
 
+def _mark_remediated(outcome: FileOutcome, removed: int) -> None:
+    """Reclassify a stored outcome as ``remediated`` after a content transform (US2).
+
+    Only a ``succeeded`` (stored) outcome is promoted to ``remediated`` — a ``failed`` PUT
+    is left as the more urgent signal, and a ``skipped``/``deferred`` unit was never stored.
+    ``remediated`` counts as stored but is reported separately so an operator sees which
+    resources required a transform (data-model §5, contracts/run-accounting.md).
+    """
+    if outcome.status == "succeeded":
+        outcome.status = "remediated"
+        note = f"remediated: pruned {removed} mrp-2 stratum(s)"
+        outcome.detail = f"{outcome.detail}; {note}" if outcome.detail else note
+
+
 @dataclass
 class Pipeline:
     """Run-scoped processing context (one per execution).
@@ -550,6 +667,12 @@ class Pipeline:
     client: FhirClient | None
     type_filter: TypeFilter = field(default_factory=TypeFilter)
     collisions: CollisionTracker = field(default_factory=CollisionTracker)
+    #: Resource types to DEFER — isolated as `deferred` (not submitted) because only
+    #: fabricating or dropping clinical content could store them (FR-007, Principle V).
+    #: Empty by default: the current sample needs no deferral, but the mechanism must
+    #: exist so storability is never bought with fabrication (drives the three-state exit
+    #: code via RunSummary.deferred). Populated by policy, not a CLI flag today.
+    deferrals: frozenset = field(default_factory=frozenset)
 
     # -- shared helpers ------------------------------------------------------ #
 
@@ -573,6 +696,14 @@ class Pipeline:
                         action, source_filename)
             return FileOutcome(source_filename, kind, action, 1, "skipped",
                                "excluded by type filter (D10)")
+        if resource_type in self.deferrals:
+            # Isolate rather than fabricate: this type could only be stored by inventing or
+            # dropping clinical content, so it is deferred (not submitted) — never blocks a
+            # sibling, and surfaces via the three-state exit code (FR-007, FR-011).
+            logger.warning("Deferring %s (%s): only fabrication could store this type; "
+                           "isolated, not submitted (FR-007).", action, source_filename)
+            return FileOutcome(source_filename, kind, action, 1, "deferred",
+                               "deferred: would require fabrication (FR-007)")
         if self.dry_run:
             logger.info("[dry-run] would %s (%s).", action, source_filename)
             return FileOutcome(source_filename, kind, action, 1, "succeeded", "dry-run")
@@ -635,9 +766,15 @@ class Pipeline:
     def _process_measure_report(self, report: dict, source_filename: str,
                                 measure: str | None) -> list[FileOutcome]:
         self._stamp(report, source_filename)
+        # Cause 2 transform on the write path, BEFORE the mirror, so output/ bytes equal
+        # the PUT bytes (FR-008, contract C8). The test/input fixture is never touched.
+        removed = prune_measurereport_strata(report, source_filename)
         self._maybe_mirror(measure, source_filename, report)
-        return [self._guarded_put(KIND_MEASURE_REPORT, "MeasureReport",
-                                  report.get("id"), report, source_filename)]
+        outcome = self._guarded_put(KIND_MEASURE_REPORT, "MeasureReport",
+                                    report.get("id"), report, source_filename)
+        if removed:
+            _mark_remediated(outcome, removed)
+        return [outcome]
 
     def _process_message(self, bundle: dict, source_filename: str,
                          measure: str | None) -> list[FileOutcome]:
@@ -650,10 +787,16 @@ class Pipeline:
         if composition is not None:
             self._stamp(composition, source_filename)
             warn_unresolved_composition_refs(composition, document_resource_keys(bundle))
+        # Cause 2 transform for MeasureReports nested inside this message/document Bundle,
+        # BEFORE the mirror + whole-Bundle PUT, so the Bundle is not rejected whole for an
+        # unpruned nested MeasureReport (FR-005) and output/ bytes equal the PUT bytes (C8).
+        removed = prune_nested_measurereports(bundle, source_filename)
         self._maybe_mirror(measure, source_filename, bundle)
 
         outcomes = [self._guarded_put(KIND_MESSAGE, "Bundle", bundle.get("id"),
                                       bundle, source_filename)]
+        if removed:
+            _mark_remediated(outcomes[0], removed)
         if composition is not None:
             # The Composition's per-case GUID is collision-safe (D4b); persist it as its
             # own first-class outcome in addition to the message Bundle.
@@ -778,6 +921,16 @@ def run(args: argparse.Namespace) -> int:
             if outcome.status == "succeeded":
                 summary.succeeded += 1
                 summary.submitted += 1
+            elif outcome.status == "remediated":
+                # Stored, but via a content transform — counted separately from untouched
+                # `succeeded` so the summary reports which resources required remediation
+                # (data-model §5). Does not affect the exit code.
+                summary.remediated += 1
+                summary.submitted += 1
+            elif outcome.status == "deferred":
+                # Isolated to avoid fabrication (FR-007) — NOT submitted; drives the
+                # three-state exit code (EXIT_COMPLETED_WITH_DEFERRALS) via RunSummary.
+                summary.deferred += 1
             elif outcome.status == "failed":
                 summary.failed += 1
                 summary.submitted += 1
@@ -803,27 +956,42 @@ def _report_summary(summary: RunSummary, dry_run: bool) -> None:
         if o.resource_type is None:
             continue
         counts = by_type.setdefault(
-            o.resource_type, {"succeeded": 0, "failed": 0, "skipped": 0})
+            o.resource_type,
+            {"succeeded": 0, "remediated": 0, "deferred": 0, "failed": 0, "skipped": 0})
         if o.status in counts:
             counts[o.status] += 1
 
     if by_type:
         logger.info("-" * 60)
-        logger.info("resources by type:")
+        logger.info("resources by type "
+                    "(stored = succeeded + remediated; deferred = not submitted):")
         for rtype in sorted(by_type):
             c = by_type[rtype]
-            submitted = c["succeeded"] + c["failed"]
+            # submitted = every unit actually PUT; deferred/skipped were not submitted.
+            submitted = c["succeeded"] + c["remediated"] + c["failed"]
             logger.info(
-                "  %-18s submitted=%-3d succeeded=%-3d failed=%-3d skipped=%-3d",
-                rtype, submitted, c["succeeded"], c["failed"], c["skipped"])
+                "  %-18s submitted=%-3d succeeded=%-3d remediated=%-3d failed=%-3d "
+                "deferred=%-3d skipped=%-3d",
+                rtype, submitted, c["succeeded"], c["remediated"], c["failed"],
+                c["deferred"], c["skipped"])
 
     logger.info("-" * 60)
     logger.info("read=%d input-files | resources: submitted=%d succeeded=%d "
-                "failed=%d skipped=%d",
+                "remediated=%d failed=%d deferred=%d skipped=%d",
                 summary.read, summary.submitted, summary.succeeded,
-                summary.failed, summary.skipped)
-    logger.info("exit_code=%d", summary.exit_code)
+                summary.remediated, summary.failed, summary.deferred, summary.skipped)
+    logger.info("exit_code=%d (%s)", summary.exit_code, _exit_code_meaning(summary.exit_code))
     logger.info("=" * 60)
+
+
+def _exit_code_meaning(code: int) -> str:
+    """Human-readable meaning of a resolved exit code, so an operator reads the run's
+    disposition from its own summary without cross-referencing the docs (FR-012)."""
+    return {
+        EXIT_SUCCESS: "success — every in-scope resource stored",
+        EXIT_UNEXPECTED_ERROR: "unexpected error — an undocumented rejection/transport failure",
+        EXIT_COMPLETED_WITH_DEFERRALS: "completed with deferrals — some types isolated, not submitted",
+    }.get(code, "unknown")
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -88,9 +88,13 @@ untouched.
 5. Each removal emits a WARNING carrying the removed stratum's population counts (FR-006).
 
 > **Edge case (spec)**: a stratifier whose strata are all malformed loses all its strata; a stratifier
-> with a mix loses only the malformed ones. An empty `stratifier` (0 strata) does not violate `mrp-2`
-> (the `.all()` is vacuously true), so the stratifier element itself is left in place — the transform
-> removes strata, not stratifiers, keeping the change minimal.
+> with a mix loses only the malformed ones. When the removal empties a stratifier's `stratum` list, the
+> `stratum` **property is deleted** rather than left as `[]` — an empty array is itself a base-FHIR
+> violation ("Array cannot be empty — the property should not be present if it has no values") and
+> would introduce a new HL7-gate signature (FR-009, confirmed by `scripts/validate.sh` during T013). A
+> stratifier with no `stratum` satisfies `mrp-2` vacuously, so the stratifier element itself is left in
+> place — the transform removes strata (and an emptied `stratum` property), not stratifiers, keeping the
+> change minimal.
 
 ---
 

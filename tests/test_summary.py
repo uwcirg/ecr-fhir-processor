@@ -44,7 +44,7 @@ class ReportSummaryStratificationTest(unittest.TestCase):
         with self.assertLogs("ecr-fhir-processor", level="INFO") as cap:
             process._report_summary(self._summary(), dry_run=False)
         text = "\n".join(cap.output)
-        self.assertIn("resources by type:", text)
+        self.assertIn("resources by type", text)
         self.assertIn("Observation", text)
         self.assertIn("submitted=2", text)  # 1 succeeded + 1 failed
         self.assertIn("Patient", text)
@@ -57,6 +57,39 @@ class ReportSummaryStratificationTest(unittest.TestCase):
         text = "\n".join(cap.output)
         self.assertIn("read=1 input-files", text)
         self.assertIn("resources: submitted=3", text)
+
+
+class RemediatedDeferredStratificationTest(unittest.TestCase):
+    """Per-type and totals reporting of the storability statuses (FR-012, SC-006)."""
+
+    def _summary(self):
+        s = process.RunSummary(read=2, submitted=3, succeeded=1, remediated=1,
+                               deferred=1, failed=0, skipped=0)
+        s.outcomes = [
+            _outcome("PUT Observation/a", "succeeded"),
+            _outcome("PUT MeasureReport/b", "remediated"),
+            _outcome("PUT MeasureReport/c", "deferred"),
+        ]
+        return s
+
+    def test_per_type_row_reports_remediated_and_deferred(self):
+        with self.assertLogs("ecr-fhir-processor", level="INFO") as cap:
+            process._report_summary(self._summary(), dry_run=False)
+        text = "\n".join(cap.output)
+        self.assertIn("remediated=1", text)
+        self.assertIn("deferred=1", text)
+        # MeasureReport row carries both the remediated and deferred outcomes.
+        mr_line = next(ln for ln in cap.output
+                       if "MeasureReport" in ln and "submitted" in ln)
+        self.assertIn("remediated=1", mr_line)
+        self.assertIn("deferred=1", mr_line)
+
+    def test_totals_line_includes_remediated_and_deferred(self):
+        with self.assertLogs("ecr-fhir-processor", level="INFO") as cap:
+            process._report_summary(self._summary(), dry_run=False)
+        totals = next(ln for ln in cap.output if "input-files" in ln)
+        self.assertIn("remediated=1", totals)
+        self.assertIn("deferred=1", totals)
 
 
 if __name__ == "__main__":

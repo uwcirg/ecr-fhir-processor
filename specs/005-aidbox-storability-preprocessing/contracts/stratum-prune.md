@@ -36,7 +36,7 @@ def prune_nested_measurereports(bundle: dict, source_filename: str) -> int:
 | C1 | A stratum is removed **iff** `stratum.get("value") is None and not stratum.get("component")`. | FR-005 |
 | C2 | A stratum with `value` **xor** `component` is left byte-identical. | FR-005 |
 | C3 | Every non-stratum element of the MeasureReport (group populations, measureScore, DEQM extensions, meta, id, etc.) is unchanged. | FR-005 |
-| C4 | Empty `stratum` arrays and empty `stratifier`/`group` arrays are left in place (the transform removes strata only; an empty stratum list satisfies `mrp-2` vacuously). | data-model §4 |
+| C4 | When a removal empties a stratifier's `stratum` list, the `stratum` **property is deleted** (not left as `[]`). An empty array is itself a base-FHIR violation ("Array cannot be empty — the property should not be present if it has no values"), so leaving `[]` would introduce a new HL7-gate signature (FR-009). A stratifier with no `stratum` satisfies `mrp-2` vacuously; the stratifier/group elements themselves are left in place (the transform removes strata, never stratifiers). | data-model §4, FR-009 |
 | C5 | Idempotent: a second call removes 0 and changes nothing. | FR-010 |
 | C6 | Each removal logs at **WARNING** or above and the message **includes the removed stratum's `population` counts** (e.g. code + count per population), so the drop is auditable. | FR-006, SC-003 |
 | C7 | Applies to **standalone** MeasureReports and MeasureReports **nested inside** a persisted message/document Bundle; the nested walk recurses through nested Bundles. | FR-005 |

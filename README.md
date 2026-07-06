@@ -33,12 +33,19 @@ Repository and Analytics Exchange" project.
     Bundle whole — making it queryable for downstream SQL-on-FHIR analytics. Only the
     Composition is promoted (no lower-fidelity overwrite of the authoritative
     collection-Bundle resources).
+- Makes every emitted resource **storable on the Aidbox ingestion surface** without
+  fabricating or dropping clinical content (see [Aidbox storability](#aidbox-storability)):
+  non-mutating levers clear reference and terminology rejections, and a documented,
+  non-fabricating **stratum-prune transform** makes MeasureReports storable (removing each
+  malformed `mrp-2` stratum that carries no stratification key) rather than deferring them.
 - Lets a problem resource type be landed in a **separate idempotent run** via
-  `--only-types` / `--skip-types` (e.g. the test MeasureReports that currently fail
-  Aidbox validation): persist everything else first, then land the deferred type later —
-  the second run neither duplicates nor rolls back the first.
-- Logs every outcome to the console and a timestamped audit file, and exits non-zero if
-  any submission failed (a rejected resource never blocks its siblings).
+  `--only-types` / `--skip-types`: persist one type first, then land another later — the
+  second run neither duplicates nor rolls back the first.
+- Logs every outcome to the console and a timestamped audit file, reporting each FHIR type
+  as **stored / remediated / deferred**, and exits with a **three-state code**: `0` when
+  every in-scope resource stored (remediation is still `0`), `1` on an unexpected failure,
+  and `2` when a type was deferred (isolated to avoid fabrication). A rejected resource
+  never blocks its siblings.
 
 The runtime uses the **Python 3 standard library only** — no `pip install` required.
 
@@ -94,13 +101,61 @@ python3 process.py --input-dir test/input --dry-run --verbose
 # Persist to the configured FHIR server:
 python3 process.py --input-dir test/input --config config.json
 
-# Independent per-type runs (the test MeasureReports currently fail Aidbox validation):
+# Independent per-type runs (operational convenience — MeasureReports are storable now
+# via the stratum-prune transform, so this split is no longer required for them):
 #   1. land everything except MeasureReports …
 python3 process.py --input-dir test/input --skip-types MeasureReport
-#   2. … then, after the Aidbox validation profile is relaxed, land just those
-#      (idempotent — neither duplicates nor rolls back the first run):
+#   2. … then land just those (idempotent — neither duplicates nor rolls back run 1):
 python3 process.py --input-dir test/input --only-types MeasureReport
 ```
+
+## Aidbox storability
+
+Aidbox's FHIR Schema engine (kept **enabled** — `BOX_FHIR_SCHEMA_VALIDATION=true`) is a
+second validation surface, distinct from the HL7 validator gate. Making every emitted
+resource storable there is done **without fabricating or dropping clinical content**
+(constitution Principle VIII, subordinate to Principle V). The four documented Aidbox
+rejection causes are cleared in priority order — non-mutating levers first, a transform
+only where no lever exists (see [`known-validation-issues.md`](known-validation-issues.md)):
+
+- **Cause 1 — reference target-profile conformance** (Observation, MedicationRequest, and
+  the message Bundles carrying them). Cleared by a **non-mutating lever**: the per-request
+  `aidbox-validation-skip: reference` header the processor already sends when
+  `config.server.validation_skip` includes `"reference"`. **No content is edited** — the
+  submitted bytes equal the emitted bytes.
+- **Cause 3 — terminology display binding** (the MeasureReports). Cleared **box-side** by
+  leaving `BOX_FHIR_TERMINOLOGY_SERVICE_BASE_URL` unset. The processor makes **no** content
+  change and never rewrites terminology displays.
+- **Cause 2 — base-FHIR `mrp-2` invariant** (every MeasureReport, standalone and nested in
+  message Bundles). The **only** cause with no non-mutating lever, so the **only** content
+  transform: the processor **removes each stratifier `stratum` that has neither `value` nor
+  `component`** — a stratum with no stratification key is malformed *structure*, not
+  clinical content. The transform is **non-fabricating** (it only removes, never invents a
+  `value`/`component`), idempotent, and runs on the write path **before** the `output/`
+  mirror so the mirrored bytes equal the PUT bytes. Every removal is logged at WARNING with
+  the population counts the stratum carried, and re-validating the transformed output
+  through the HL7 gate introduces **no new signature** vs. `test/conformance-baseline.sigs`.
+  MeasureReports are thus made storable **rather than deferred** — replacing the earlier
+  "land MeasureReports in a later run once Aidbox is relaxed" stance.
+- **Cause 4 — base-FHIR `ext-1` invariant** (the CMS2 eICR Composition + its message
+  Bundle). Also no non-mutating lever (`ext-1` is a base cardinality invariant), so a
+  second structure-only transform: the processor **removes each child of an
+  `eicr-trigger-code-flag-extension` that carries neither a `value[x]` nor nested
+  extensions** — in the sample data an empty `triggerCodeValueSetVersion`. The
+  `triggerCode`/`triggerCodeValueSet` siblings (the clinical payload) are preserved and no
+  version is fabricated (non-fabricating, idempotent, runs before the mirror). Every
+  removal is logged at WARNING, and the transformed output introduces **no new** HL7-gate
+  signature.
+
+The FHIR Schema engine stays **enabled** throughout (`BOX_FHIR_SCHEMA_VALIDATION=true`) —
+it is never disabled to force storage (that reverts Aidbox to the deprecated legacy engine
+and breaks the FHIR REST API). Every applied lever/transform is logged at WARNING
+(`[remediation:<key>]`) and documented in `known-validation-issues.md`; an undocumented
+remediation is a defect, enforced by a test. The run reports each FHIR type as
+**stored / remediated / deferred / transformed** (where `transformed` counts resources a
+content transform touched — visible even if the resource then failed on an independent
+cause) and exits `0` (all stored) / `1` (unexpected failure) / `2` (a type deferred), so
+operators and CI can branch on the outcome without Aidbox logs.
 
 ## Analytics views (`publish_views.py`)
 

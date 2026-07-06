@@ -38,6 +38,66 @@ DEFAULT_PATHS = {"input_dir": "input", "output_dir": "output", "log_dir": "log"}
 #: logger via :func:`setup_logging`.
 logger = logging.getLogger("ecr-fhir-processor")
 
+# --------------------------------------------------------------------------- #
+# Process exit codes — three-state storability outcome (contracts/run-accounting.md,
+# FR-012). These constants are the single source of truth for the run's exit status
+# (documented in README); operators/CI branch on them.
+# --------------------------------------------------------------------------- #
+
+#: Every in-scope resource stored (no unexpected failure, no deferral).
+EXIT_SUCCESS = 0
+#: At least one unexpected `failed` (undocumented rejection / transport error). Retains
+#: the pre-feature `failed → 1` value for backward compatibility. Dominates a deferral.
+EXIT_UNEXPECTED_ERROR = 1
+#: At least one resource `deferred` (isolated to avoid fabrication) and NO unexpected
+#: failure. Distinct from EXIT_UNEXPECTED_ERROR so a deferral is never reported as an error.
+EXIT_COMPLETED_WITH_DEFERRALS = 2
+
+# --------------------------------------------------------------------------- #
+# Remediation registry (contracts/run-accounting.md, FR-006/FR-013) — one stable key
+# per Aidbox accommodation. This is the single source of truth for the runtime
+# remediation logging and the FR-013 documentation audit (tests/test_remediation_docs.py):
+# runtime remediations ⊆ REMEDIATIONS ⊆ documented `REMEDIATION:` markers in
+# known-validation-issues.md, so "an undocumented remediation is a defect" is a
+# deterministic check rather than prose-scraping.
+# --------------------------------------------------------------------------- #
+
+#: Cause 1 — reference target-profile conformance, cleared by the non-mutating
+#: `aidbox-validation-skip: reference` header (no content change).
+REMEDIATION_REFERENCE_SKIP = "aidbox-cause-1-reference-skip"
+#: Cause 3 — terminology display binding, cleared box-side by leaving the terminology
+#: server unset (no content change).
+REMEDIATION_TERMINOLOGY_UNSET = "aidbox-cause-3-terminology-unset"
+#: Cause 2 — base-FHIR `mrp-2` invariant, cleared by the stratum-prune transform
+#: (structure-only content change).
+REMEDIATION_MRP2_STRATUM_PRUNE = "aidbox-cause-2-mrp2-stratum-prune"
+#: Cause 4 — base-FHIR `ext-1` invariant on an empty `triggerCodeValueSetVersion`
+#: sub-extension of the eICR trigger-code-flag extension, cleared by removing the
+#: value/child-less sub-extension (structure-only content change; non-fabricating).
+REMEDIATION_TRIGGER_CODE_EXT_PRUNE = "aidbox-cause-4-trigger-code-ext-prune"
+
+#: The complete set of remediation keys. Every applied lever/transform logs one of these
+#: via :func:`log_remediation`, and each has a matching `REMEDIATION: <key>` marker line
+#: in known-validation-issues.md (audited by tests/test_remediation_docs.py).
+REMEDIATIONS = frozenset({
+    REMEDIATION_REFERENCE_SKIP,
+    REMEDIATION_TERMINOLOGY_UNSET,
+    REMEDIATION_MRP2_STRATUM_PRUNE,
+    REMEDIATION_TRIGGER_CODE_EXT_PRUNE,
+})
+
+
+def log_remediation(key: str, msg: str, *args: object) -> None:
+    """Log one applied Aidbox remediation at WARNING, keyed to the REMEDIATIONS registry.
+
+    ``key`` MUST be a member of :data:`REMEDIATIONS` (asserted) so every runtime
+    remediation is drawn from the documented set (FR-013). The ``[remediation:<key>]``
+    prefix makes the audit trail greppable and ties the log line to the
+    known-validation-issues.md entry for that cause (FR-006, SC-003).
+    """
+    assert key in REMEDIATIONS, f"Unknown remediation key {key!r} (not in REMEDIATIONS)."
+    logger.warning("[remediation:%s] " + msg, key, *args)
+
 
 # --------------------------------------------------------------------------- #
 # Data structures (data-model.md)
@@ -63,9 +123,14 @@ class FileOutcome:
     kind: str
     action: str
     resource_count: int
-    status: str  # succeeded | failed | skipped
+    status: str  # succeeded | remediated | deferred | failed | skipped (data-model §5)
     detail: str = ""
     resource_type: str | None = None  # FHIR type; derived from `action` for submissions
+    #: Count of elements removed by content transforms applied to this unit (mrp-2 strata +
+    #: empty trigger-code sub-extensions), recorded REGARDLESS of the final PUT result. Lets
+    #: the summary surface a transform that ran even when the resource FAILED on an
+    #: independent cause, so successful remediation is never invisible (data-model §5).
+    remediations_applied: int = 0
 
     def __post_init__(self) -> None:
         # Submission actions are "PUT <Type>/<id>"; file-level skip/error actions
@@ -82,8 +147,14 @@ class RunSummary:
     read: int = 0
     submitted: int = 0
     succeeded: int = 0
+    remediated: int = 0
+    deferred: int = 0
     failed: int = 0
     skipped: int = 0
+    #: Count of units that had at least one content transform applied, INDEPENDENT of
+    #: whether the unit was ultimately stored. `transformed >= remediated` (a `remediated`
+    #: unit is a transformed unit that also stored). Reported, never affects the exit code.
+    transformed: int = 0
     outcomes: list[FileOutcome] = field(default_factory=list)
 
     def record(self, outcome: FileOutcome) -> None:
@@ -91,7 +162,18 @@ class RunSummary:
 
     @property
     def exit_code(self) -> int:
-        return 0 if self.failed == 0 else 1
+        """Three-state storability exit code (contracts/run-accounting.md, FR-012).
+
+        An unexpected ``failed`` dominates (most urgent → error code); else any
+        ``deferred`` yields the distinct deferrals code; else success. ``remediated``
+        never changes the code — a fully-remediated-and-stored run exits 0. The
+        ``failed → 1`` mapping is unchanged from the pre-feature two-state behavior.
+        """
+        if self.failed:
+            return EXIT_UNEXPECTED_ERROR
+        if self.deferred:
+            return EXIT_COMPLETED_WITH_DEFERRALS
+        return EXIT_SUCCESS
 
 
 class SubmissionError(Exception):

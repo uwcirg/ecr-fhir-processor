@@ -57,6 +57,47 @@ def _clinical(bundle):
     )
 
 
+MR_FIXTURE = (REPO_ROOT / "test" / "input" / "controllable-bp" / "standard"
+              / "CMS165_bulk_dial_high_00042"
+              / "MeasureReport_ae8ea7e3-ff01-4e9c-a736-4f7d09ade91d.json")
+
+
+class ReRunAfterRemediationTest(unittest.TestCase):
+    """SC-004: a re-run AFTER the mrp-2 stratum-prune remediation is idempotent — no
+    duplicate resources, no content diffs for already-stored resources, exit 0 (FR-010)."""
+
+    def _process_mr_once(self, output_dir, version):
+        data = json.loads(MR_FIXTURE.read_text())
+        pipe = _dry_pipeline(output_dir, version)
+        pipe.process(data, process.KIND_MEASURE_REPORT, MR_FIXTURE.name, "controllable-bp")
+        mirrored = next(Path(output_dir).rglob(MR_FIXTURE.name))
+        return json.loads(mirrored.read_text())
+
+    def test_transform_is_idempotent_on_rerun(self):
+        # Feed run-1's already-remediated output back through a second run: the second
+        # prune removes 0 strata and the mirrored bytes are unchanged (no drift, no dup).
+        with tempfile.TemporaryDirectory() as d1, tempfile.TemporaryDirectory() as d2:
+            run1 = self._process_mr_once(d1, "v1")
+            removed_second = process.prune_measurereport_strata(
+                json.loads(json.dumps(run1)), MR_FIXTURE.name)
+            self.assertEqual(removed_second, 0)  # already clean after run 1
+
+            # A fresh run at a different version differs ONLY in provenance meta; the
+            # clinical content (incl. the pruned stratifiers) is byte-identical.
+            run2 = self._process_mr_once(d2, "v2")
+
+            def _clinical_content(resource):
+                return {k: v for k, v in resource.items() if k != "meta"}
+
+            self.assertEqual(_clinical_content(run1), _clinical_content(run2))
+
+    def test_rerun_exit_code_is_zero(self):
+        # No unexpected failure and no deferral after remediation ⇒ exit 0 (the run stores
+        # everything, some via remediation). Exercised at the RunSummary level.
+        s = process.RunSummary(succeeded=40, remediated=8, deferred=0, failed=0)
+        self.assertEqual(s.exit_code, 0)
+
+
 class ReRunIdempotencyTest(unittest.TestCase):
     def test_same_put_targets_and_clinical_content_across_runs(self):
         with tempfile.TemporaryDirectory() as d1, tempfile.TemporaryDirectory() as d2:

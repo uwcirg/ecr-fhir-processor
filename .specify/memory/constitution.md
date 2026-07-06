@@ -1,7 +1,64 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.1.1 → 1.2.0 (latest)
+Version change: 1.2.0 → 1.3.0 (latest)
+Rationale (1.3.0, MINOR): Adds one new principle (VIII. Input Pre-Processing for Aidbox
+Storability). Storing the resources in the target Aidbox server is now an explicit project
+goal, so the project MUST pre-process/remediate input resources enough to be *stored*
+(a validation surface distinct from the HL7 conformance gate). No existing principle is
+removed or redefined — the new principle is deliberately SUBORDINATE to Principle V
+(never fabricate clinical values; never silently drop clinical content; log every
+accommodation) and to the HL7 validator gate (remediation MUST NOT regress conformance),
+so this is MINOR, not MAJOR.
+
+Added principles:
+  - VIII. Input Pre-Processing for Aidbox Storability — the project MUST make input
+    resources storable in the target Aidbox server, treating Aidbox ingestion as a second
+    validation surface separate from the HL7 conformance gate. Non-mutating levers are
+    preferred (the per-request `aidbox-validation-skip: reference` header for Cause 1;
+    box-side terminology config for Cause 3) before any content transform. Content
+    transforms (e.g., for the `mrp-2` base-invariant violation, Cause 2) are permitted
+    ONLY when they neither fabricate clinical values nor silently drop clinical content
+    (Principle V); where the only "fix" would be fabrication, the resource type MUST be
+    isolated/deferred (Principle V independent persistence), never fabricated. Every
+    remediation MUST be documented in known-validation-issues.md and logged at runtime,
+    MUST NOT edit the immutable test/input fixtures (Principle III), and MUST NOT introduce
+    new HL7-validator errors against the committed baseline.
+
+Modified sections:
+  - Top summary blockquote — records that the processor also pre-processes input resources
+    so they are storable in the target Aidbox server, not only validated and persisted.
+
+Templates requiring updates:
+  - .specify/templates/plan-template.md  ✅ aligned (Constitution Check is a generic gate;
+    verified no hard-coded principle references)
+  - .specify/templates/spec-template.md  ✅ aligned (no principle-specific content)
+  - .specify/templates/tasks-template.md ✅ aligned (no principle-specific content)
+  - .specify/templates/checklist-template.md ✅ aligned
+
+Downstream artifacts requiring follow-up (NOT auto-edited by this command):
+  - known-validation-issues.md ⚠ PENDING — the "Aidbox ingestion-time validation" section
+    currently frames Causes 1–3 as reference-only and says the mrp-2 data fix is "out of
+    scope per the gate philosophy." Under Principle VIII, storability remediation is now IN
+    scope: for each Cause, record the chosen lever/transform (or, if only fabrication would
+    fix it, the decision to isolate/defer that type). The architectural note recommending
+    BOX_FHIR_SCHEMA_VALIDATION=false must be reconciled with VIII (that flag is a DO-NOT-USE
+    engine selector; storability must come from per-request levers + non-fabricating
+    transforms, not from disabling the schema engine).
+  - A new feature spec (e.g., specs/00X-aidbox-preprocessing/) ⚠ PENDING — the pre-processing
+    pipeline is a distinct feature; run /speckit-specify then /speckit-plan. The spec must
+    decide, per Cause, exactly which transform is applied and prove it neither fabricates nor
+    drops clinical content (e.g., whether removing a population-only, value-and-component-less
+    stratifier is "malformed structure" vs. clinical content).
+  - README.md ⚠ PENDING — the "Independent per-type runs" / deferred-MeasureReport notes now
+    describe a pre-Principle-VIII stance; update once the pre-processing pipeline lands.
+
+Deferred TODOs:
+  - TODO(MRP2_REMEDIATION): the mrp-2 stratifier violation (Cause 2) has no config/header
+    lever; the exact non-fabricating transform (or the decision to isolate/defer
+    MeasureReports) is to be settled in the pre-processing feature spec, not the constitution.
+
+----- Prior amendment (1.1.1 → 1.2.0, MINOR) -----
 Rationale (1.2.0, MINOR): Adds one new principle (VII) and materially expands the rationale
 of Principle VI to reflect a new project responsibility: this project now AUTHORS the
 SQL-on-FHIR ViewDefinitions and a publish/materialize script (previously the constitution
@@ -105,9 +162,10 @@ Deferred TODOs:
 > Principles governing the development, testing, and maintenance of a Python
 > utility that consumes FHIR R4 electronic Case Reporting (eCR) resources for
 > chronic-disease quality measures, validates them against both the HL7 FHIR
-> Reference Validator (CLI) and a target FHIR server, persists them to that
-> FHIR server, and publishes SQL-on-FHIR ViewDefinitions that flatten the
-> persisted resources for downstream analytics.
+> Reference Validator (CLI) and a target FHIR server, pre-processes them so they
+> are storable in the target Aidbox server, persists them to that FHIR server,
+> and publishes SQL-on-FHIR ViewDefinitions that flatten the persisted resources
+> for downstream analytics.
 
 ## Core Principles
 
@@ -403,6 +461,60 @@ responsibility, not a downstream-only concern.
   (Principle VI); a view MUST NOT depend on content that exists only inside an un-promoted
   Bundle.
 
+### VIII. Input Pre-Processing for Aidbox Storability
+
+Storing the processed resources in the target Aidbox server is an explicit project goal.
+The processor MUST pre-process input resources enough that the target Aidbox server will
+**store** them, treating Aidbox ingestion-time validation as a **second, distinct
+validation surface** from the HL7 FHIR Reference Validator gate. Storability remediation
+targets that Aidbox surface; it MUST NOT be conflated with, or allowed to regress, HL7
+conformance (Principles II–III).
+
+**Rationale:** Aidbox enforces as hard HTTP 422s several things the HL7 validator gate only
+warns about or that the committed baseline already tolerates (see
+`known-validation-issues.md` → "Aidbox ingestion-time validation"). A resource that the HL7
+gate accepts but Aidbox rejects is unstored — and an unstored resource is invisible to the
+SQL-on-FHIR analytics workflow this project exists to feed (Principles VI–VII). Making the
+resources storable is therefore a correctness requirement for the project's purpose, not an
+optional convenience. This principle is deliberately **subordinate to Principle V**: the goal
+is storability, never storability bought with fabricated or dropped clinical content.
+
+**Rules:**
+
+- **Prefer non-mutating levers over content transforms.** Where the target server exposes a
+  per-request or box-side lever that makes a resource storable without altering its content,
+  that lever MUST be used before any content transform. Specifically: the per-request
+  `aidbox-validation-skip` header (driven by `config.server.validation_skip`) for
+  target-profile reference-conformance rejections (Cause 1), and box-side terminology
+  configuration for terminology-binding rejections (Cause 3). Content is transformed only
+  when no non-mutating lever exists (e.g., the base-FHIR `mrp-2` invariant, Cause 2).
+- **Content transforms are bounded by Principle V.** A pre-processing transform MUST NOT
+  fabricate clinical values to satisfy a constraint, and MUST NOT silently drop clinical
+  content. Removing a structurally malformed element that carries **no** clinical meaning
+  (e.g., a stratifier stratum with a `population` only and neither `value` nor `component`)
+  is permitted only when it is demonstrably empty of clinical content; the determination and
+  its justification belong in the feature spec, not in ad-hoc code.
+- **No fabrication as an escape hatch.** Where the only way to make a resource storable would
+  be to fabricate clinical data or drop clinical content, the processor MUST NOT do so.
+  Instead it MUST isolate/defer that resource type (Principle V — independent persistence,
+  per-type failure isolation) so the storable majority still lands, and surface the deferral
+  (logged + reflected in exit status).
+- **Every remediation is documented and logged.** Each pre-processing transform or lever MUST
+  be recorded in `known-validation-issues.md` (the exact Aidbox message it addresses, root
+  cause, and the transform/lever applied) and logged at WARNING level or above at runtime
+  (Principle V). Silent remediation is prohibited.
+- **Fixtures stay immutable.** Pre-processing transforms the in-memory / emitted resources on
+  the path to the server; it MUST NOT edit the canonical `test/input/` fixtures (Principle
+  III). The fixtures remain the pre-transform regression inputs and the conformance baseline.
+- **No conformance regression.** A storability remediation MUST NOT introduce any new
+  HL7-validator error against the committed baseline (`test/conformance-baseline.sigs`). If a
+  transform needed for Aidbox would break HL7 conformance, the conflict MUST be surfaced and
+  resolved in review, not silently accepted.
+- **`BOX_FHIR_SCHEMA_VALIDATION=false` is not a storability lever.** Disabling the Aidbox FHIR
+  Schema engine is a DO-NOT-USE engine selector that breaks the FHIR REST API (every PUT
+  404s); storability MUST come from per-request levers plus non-fabricating transforms, never
+  from turning the schema engine off (see `known-validation-issues.md`).
+
 ## Deployment & Security
 
 ### Configuration over Code Changes
@@ -546,4 +658,4 @@ reasoning in the relevant spec or PR — do not silently deviate.
 - When a principle conflicts with a practical constraint, document the exception and
   the reasoning in the relevant spec or PR.
 
-**Version**: 1.2.0 | **Ratified**: 2026-06-09 | **Last Amended**: 2026-06-15
+**Version**: 1.3.0 | **Ratified**: 2026-06-09 | **Last Amended**: 2026-07-01

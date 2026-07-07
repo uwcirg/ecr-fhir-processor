@@ -160,9 +160,11 @@ operators and CI can branch on the outcome without Aidbox logs.
 ## Analytics views (`publish_views.py`)
 
 Downstream analytics (e.g. a DoH team) query flattened, one-row-per-resource SQL views
-rather than raw FHIR. The materialized views now span **twelve resource types** — Patient
-plus Condition, Encounter, Observation, Practitioner, Organization, Location, Measure,
-Bundle, Procedure, MedicationRequest, and ServiceRequest. Those views are defined by
+rather than raw FHIR. The materialized views now span **thirteen resource types** — Patient
+plus Condition, Encounter, Observation, Practitioner, Organization, Location, Bundle,
+Procedure, MedicationRequest, ServiceRequest, MeasureReport, and Composition (metadata-only).
+They no longer ship an empty `Measure` view — `Measure` is a type this pipeline never
+persists, so that view could never return a row and was retired. Those views are defined by
 checked-in **SQL-on-FHIR `ViewDefinition`** resources under
 [`viewdefinitions/`](viewdefinitions/) and pushed to
 the target Aidbox server by a separate entry point, `publish_views.py`. It is a rare,

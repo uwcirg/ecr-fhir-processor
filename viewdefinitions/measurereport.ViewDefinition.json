@@ -1,0 +1,37 @@
+{
+  "resourceType": "ViewDefinition",
+  "id": "measurereport",
+  "name": "measurereport_view",
+  "status": "active",
+  "resource": "MeasureReport",
+  "description": "Flattened analytics view: one row per first-class MeasureReport persisted by this project. Exposes the measure canonical, status/type, subject/reporter reference keys, reporting period, named population-count columns, measure score, and improvement notation, plus the cms_measure attribution. Population counts navigate the MeasureReport.group.population.count element (`.count.first()`), NOT the FHIRPath `count()` aggregate, which Aidbox $materialize rejects (004 T010). Default column set is an informed, reviewable default (FR-004), not a finalized analytics-team contract.",
+  "select": [
+    {
+      "column": [
+        { "name": "id", "path": "getResourceKey()", "type": "string" },
+        { "name": "measure", "path": "measure", "type": "string" },
+        { "name": "status", "path": "status", "type": "code" },
+        { "name": "type", "path": "type", "type": "code" },
+        { "name": "subject", "path": "subject.getReferenceKey()", "type": "string" },
+        { "name": "reporter", "path": "reporter.getReferenceKey()", "type": "string" },
+        { "name": "period_start", "path": "period.start", "type": "dateTime" },
+        { "name": "period_end", "path": "period.end", "type": "dateTime" },
+        { "name": "improvement_notation", "path": "improvementNotation.coding.first().code", "type": "code" },
+        { "name": "measure_score", "path": "group.first().measureScore.value", "type": "decimal" },
+        { "name": "initial_population", "path": "group.first().population.where(code.coding.where(code = 'initial-population').exists()).count.first()", "type": "integer" },
+        { "name": "denominator", "path": "group.first().population.where(code.coding.where(code = 'denominator').exists()).count.first()", "type": "integer" },
+        { "name": "denominator_exclusion", "path": "group.first().population.where(code.coding.where(code = 'denominator-exclusion').exists()).count.first()", "type": "integer" },
+        { "name": "denominator_exception", "path": "group.first().population.where(code.coding.where(code = 'denominator-exception').exists()).count.first()", "type": "integer" },
+        { "name": "numerator", "path": "group.first().population.where(code.coding.where(code = 'numerator').exists()).count.first()", "type": "integer" },
+        { "name": "numerator_exclusion", "path": "group.first().population.where(code.coding.where(code = 'numerator-exclusion').exists()).count.first()", "type": "integer" },
+        { "name": "cms_measure", "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/cms-measure').code.first()", "type": "code" }
+      ]
+    }
+  ],
+  "where": [
+    {
+      "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/processed-by' and code = 'ecr-fhir-processor').exists()",
+      "description": "Scope the view to MeasureReports persisted by this project's processor (FR-008): match this processor's provenance tag (processed-by = ecr-fhir-processor), version-agnostic. Excludes unrelated MeasureReport resources on the same server."
+    }
+  ]
+}

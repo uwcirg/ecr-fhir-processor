@@ -281,6 +281,24 @@ here), and idempotent.
   `modules/profiling-and-validation/skip-validation-of-references-in-resource-using-request-header`);
   fetched 2026-06-12.
 
+## SQL-on-FHIR ViewDefinition FHIRPath — positional component indexer
+
+The Observation view (007) is the **first** checked-in ViewDefinition to use a positional
+index. Its second blood-pressure triad reads `component[1]` (and the first reads
+`component[0]`); every prior view uses only `.first()` / `.where()` / `.ofType()`, so
+indexer support in Aidbox's SQL-on-FHIR FHIRPath was **not previously demonstrated in this
+repo**. The authoritative gate is server acceptance on `PUT` + `$materialize` plus the
+quickstart query, run by the operator against Aidbox (007 research R2).
+
+- **Primary expression (checked in):** `component[0].…` / `component[1].…`.
+- **Documented one-line fallback if Aidbox rejects or nulls the indexer:** swap
+  `component[0]`→`component.first()` and `component[1]`→`component.last()` in
+  `viewdefinitions/observation.ViewDefinition.json` (column suffixes unchanged). The panel
+  fixtures carry exactly two components, so `.first()`/`.last()` is equivalent there.
+- **Verification outcome:** _pending — to be recorded here after the operator's
+  `publish_views.py` + `sof.observation_view` query confirms whether the primary indexer was
+  accepted or the fallback was applied (007 T005/T012)._
+
 ## Open issues (validator errors to filter)
 
 _None recorded yet._

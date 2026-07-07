@@ -160,9 +160,11 @@ operators and CI can branch on the outcome without Aidbox logs.
 ## Analytics views (`publish_views.py`)
 
 Downstream analytics (e.g. a DoH team) query flattened, one-row-per-resource SQL views
-rather than raw FHIR. The materialized views now span **twelve resource types** — Patient
-plus Condition, Encounter, Observation, Practitioner, Organization, Location, Measure,
-Bundle, Procedure, MedicationRequest, and ServiceRequest. Those views are defined by
+rather than raw FHIR. The materialized views now span **thirteen resource types** — Patient
+plus Condition, Encounter, Observation, Practitioner, Organization, Location, Bundle,
+Procedure, MedicationRequest, ServiceRequest, MeasureReport, and Composition (metadata-only).
+They no longer ship an empty `Measure` view — `Measure` is a type this pipeline never
+persists, so that view could never return a row and was retired. Those views are defined by
 checked-in **SQL-on-FHIR `ViewDefinition`** resources under
 [`viewdefinitions/`](viewdefinitions/) and pushed to
 the target Aidbox server by a separate entry point, `publish_views.py`. It is a rare,
@@ -211,6 +213,17 @@ SELECT cms_measure, count(*) FROM sof.patient_view GROUP BY cms_measure;  -- dis
 
 A Patient persisted before this column existed (not yet re-processed) yields `NULL` here,
 never an error.
+
+The Observation view (`sof.observation_view`) surfaces each Observation's nested
+`component[]` measurements as **two generic, self-describing triads** —
+`component1_display`/`component1_value`/`component1_unit` and
+`component2_display`/`component2_value`/`component2_unit` — sourced positionally from the
+first and second components (e.g. a blood-pressure panel reports Systolic 128 mmHg /
+Diastolic 88 mmHg, previously invisible because the readings live in `component[]`, not the
+top-level `value`). It also carries `value_code_display`, the human-readable label for a
+coded result alongside the existing `value_code`. All are single-valued (one row per
+Observation preserved); an Observation with no components or no coded value leaves them
+`NULL`, never fabricated.
 
 ### Joining views (`AidboxQuery`)
 

@@ -1,0 +1,33 @@
+{
+  "resourceType": "ViewDefinition",
+  "id": "composition",
+  "name": "composition_view",
+  "status": "active",
+  "resource": "Composition",
+  "description": "Flattened analytics view: one row per promoted first-class Composition persisted by this project. Document-level metadata only (status, type, category, subject/encounter/author/custodian reference keys, date, title) — no section/nested clinical content, which is promoted to its own first-class resources and covered by the other views (FR-005, Principle VI). Default column set is an informed, reviewable default (FR-005), not a finalized analytics-team contract.",
+  "select": [
+    {
+      "column": [
+        { "name": "id", "path": "getResourceKey()", "type": "string" },
+        { "name": "status", "path": "status", "type": "code" },
+        { "name": "type_code", "path": "type.coding.first().code", "type": "code" },
+        { "name": "type_system", "path": "type.coding.first().system", "type": "string" },
+        { "name": "type_display", "path": "type.coding.first().display", "type": "string" },
+        { "name": "category", "path": "category.first().coding.first().code", "type": "code" },
+        { "name": "subject", "path": "subject.getReferenceKey()", "type": "string" },
+        { "name": "encounter", "path": "encounter.getReferenceKey()", "type": "string" },
+        { "name": "date", "path": "date", "type": "dateTime" },
+        { "name": "title", "path": "title", "type": "string" },
+        { "name": "author", "path": "author.first().getReferenceKey()", "type": "string" },
+        { "name": "custodian", "path": "custodian.getReferenceKey()", "type": "string" },
+        { "name": "cms_measure", "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/cms-measure').code.first()", "type": "code" }
+      ]
+    }
+  ],
+  "where": [
+    {
+      "path": "meta.tag.where(system = 'https://uwcirg.github.io/ecr-fhir-processor/CodeSystem/processed-by' and code = 'ecr-fhir-processor').exists()",
+      "description": "Scope the view to Compositions persisted by this project's processor (FR-008): match this processor's provenance tag (processed-by = ecr-fhir-processor), version-agnostic. Excludes unrelated Composition resources on the same server."
+    }
+  ]
+}

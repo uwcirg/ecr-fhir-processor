@@ -214,6 +214,17 @@ SELECT cms_measure, count(*) FROM sof.patient_view GROUP BY cms_measure;  -- dis
 A Patient persisted before this column existed (not yet re-processed) yields `NULL` here,
 never an error.
 
+The Observation view (`sof.observation_view`) surfaces each Observation's nested
+`component[]` measurements as **two generic, self-describing triads** —
+`component1_display`/`component1_value`/`component1_unit` and
+`component2_display`/`component2_value`/`component2_unit` — sourced positionally from the
+first and second components (e.g. a blood-pressure panel reports Systolic 128 mmHg /
+Diastolic 88 mmHg, previously invisible because the readings live in `component[]`, not the
+top-level `value`). It also carries `value_code_display`, the human-readable label for a
+coded result alongside the existing `value_code`. All are single-valued (one row per
+Observation preserved); an Observation with no components or no coded value leaves them
+`NULL`, never fabricated.
+
 ### Joining views (`AidboxQuery`)
 
 Reference columns (e.g. Observation `subject`) hold the referenced resource's **key** —

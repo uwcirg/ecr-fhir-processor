@@ -35,7 +35,7 @@ Single-project CLI (unchanged from 001–006). The only edited artifact is
 
 **Purpose**: Establish the no-regression baseline before editing.
 
-- [ ] T001 Confirm the edit target and record the baseline: verify `viewdefinitions/observation.ViewDefinition.json` parses (`python3 -c "import json; json.load(open('viewdefinitions/observation.ViewDefinition.json'))"`) and note its current column set (the "existing" columns in `specs/007-observation-component-values/data-model.md`) as the FR-005/SC-004 no-regression reference.
+- [X] T001 Confirm the edit target and record the baseline: verify `viewdefinitions/observation.ViewDefinition.json` parses (`python3 -c "import json; json.load(open('viewdefinitions/observation.ViewDefinition.json'))"`) and note its current column set (the "existing" columns in `specs/007-observation-component-values/data-model.md`) as the FR-005/SC-004 no-regression reference.
 - [ ] T002 (user runs — live Aidbox) Capture the pre-edit `sof.observation_view` row count (`SELECT count(*) FROM sof.observation_view;`, quickstart Step 0) to prove one-row-per-Observation is preserved (SC-002).
 
 ---
@@ -63,8 +63,8 @@ two populated triads (e.g. Systolic 128 mmHg / Diastolic 88 mmHg) — 0 all-empt
 
 ### Implementation for User Story 1
 
-- [ ] T003 [US1] Add the two generic component triads (6 columns: `component1_display`, `component1_value`, `component1_unit`, `component2_display`, `component2_value`, `component2_unit`) to the `select[].column` array in `viewdefinitions/observation.ViewDefinition.json`, placed after `effective_date_time`, using the **primary (indexer)** paths and types from `specs/007-observation-component-values/data-model.md` (`component[0]`/`component[1]` → `.code.coding.first().display` [string], `.value.ofType(Quantity).value` [decimal], `.value.ofType(Quantity).unit` [string]). Do not add `forEach` (FR-003).
-- [ ] T004 [US1] Verify offline: `python3 -c "import json; json.load(open('viewdefinitions/observation.ViewDefinition.json'))"` parses, then `python3 -m unittest tests.test_viewdefinition -v` passes (key column, provenance `where`, single `cms_measure` all intact; quickstart Step 1).
+- [X] T003 [US1] Add the two generic component triads (6 columns: `component1_display`, `component1_value`, `component1_unit`, `component2_display`, `component2_value`, `component2_unit`) to the `select[].column` array in `viewdefinitions/observation.ViewDefinition.json`, placed after `effective_date_time`, using the **primary (indexer)** paths and types from `specs/007-observation-component-values/data-model.md` (`component[0]`/`component[1]` → `.code.coding.first().display` [string], `.value.ofType(Quantity).value` [decimal], `.value.ofType(Quantity).unit` [string]). Do not add `forEach` (FR-003).
+- [X] T004 [US1] Verify offline: `python3 -c "import json; json.load(open('viewdefinitions/observation.ViewDefinition.json'))"` parses, then `python3 -m unittest tests.test_viewdefinition -v` passes (key column, provenance `where`, single `cms_measure` all intact; quickstart Step 1).
 - [ ] T005 [US1] (user runs — live Aidbox) `python3 publish_views.py --config config.json`; confirm the Observation view `PUT` + `$materialize` succeed. **If the `component[0]`/`component[1]` indexer is rejected or yields null**, apply the fallback in `viewdefinitions/observation.ViewDefinition.json` (`component[0]`→`component.first()`, `component[1]`→`component.last()`, suffixes unchanged) per research R2 / the contract, and re-run (quickstart Step 2).
 - [ ] T006 [US1] (user runs — live Aidbox) Query `sof.observation_view WHERE code = '85354-9'` for the six component columns; assert two populated triads with the source Systolic/Diastolic values + "mmHg" units and **0 rows with all-empty measurement columns** (SC-001; quickstart Step 3).
 
@@ -83,8 +83,8 @@ non-null; query the Hemoglobin A1c row and confirm its value/unit are unchanged.
 
 ### Implementation for User Story 2
 
-- [ ] T007 [US2] Add the `value_code_display` column (path `value.ofType(CodeableConcept).coding.first().display`, type string) to the `select[].column` array in `viewdefinitions/observation.ViewDefinition.json`, placed immediately after the existing `value_code` (data-model.md). Leave `value_code` and all top-level `value_*` columns unchanged (FR-005).
-- [ ] T008 [US2] Verify offline: re-run `python3 -m unittest tests.test_viewdefinition -v` (still green after the added column).
+- [X] T007 [US2] Add the `value_code_display` column (path `value.ofType(CodeableConcept).coding.first().display`, type string) to the `select[].column` array in `viewdefinitions/observation.ViewDefinition.json`, placed immediately after the existing `value_code` (data-model.md). Leave `value_code` and all top-level `value_*` columns unchanged (FR-005).
+- [X] T008 [US2] Verify offline: re-run `python3 -m unittest tests.test_viewdefinition -v` (still green after the added column).
 - [ ] T009 [US2] (user runs — live Aidbox) Re-publish/materialize if not already carrying T007, then query `sof.observation_view WHERE code IN ('73831-0','73832-8')`; assert `value_code` present **and** `value_code_display` non-null (FR-006; quickstart Step 4).
 - [ ] T010 [US2] (user runs — live Aidbox) Regression + invariant check: query `code = '4548-4'` (Hemoglobin A1c) — `value_quantity`/`value_unit` unchanged vs. T001 baseline and all component columns null (FR-005/SC-004; Step 5); and `SELECT count(*)` equals the T002 baseline (SC-002; Step 6).
 
@@ -96,8 +96,8 @@ non-null; query the Hemoglobin A1c row and confirm its value/unit are unchanged.
 
 **Purpose**: Documentation to reflect the new columns and the indexer-verification outcome.
 
-- [ ] T011 [P] Update `README.md` to note the Observation view now surfaces component (blood-pressure) measurements as two generic triads plus a coded-result display label.
-- [ ] T012 [P] Update `known-validation-issues.md` to record the outcome of the `component[0]`/`component[1]` indexer verification (primary accepted, or fallback `.first()`/`.last()` applied) from T005 — the first use of a positional index in this repo's view set.
+- [X] T011 [P] Update `README.md` to note the Observation view now surfaces component (blood-pressure) measurements as two generic triads plus a coded-result display label.
+- [X] T012 [P] Update `known-validation-issues.md` to record the outcome of the `component[0]`/`component[1]` indexer verification (primary accepted, or fallback `.first()`/`.last()` applied) from T005 — the first use of a positional index in this repo's view set.
 - [ ] T013 (user runs — live Aidbox) Run the full `specs/007-observation-component-values/quickstart.md` end-to-end as the final acceptance pass (all 6 steps green).
 
 ---

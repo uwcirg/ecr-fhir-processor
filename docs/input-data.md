@@ -164,8 +164,8 @@ together; every file refers to the same `Patient/<GUID>`.
 
 **Source:** the two **KARS knowledge bundles** that were loaded into **eCRNow 4.0.4**
 to produce the fixtures (received from MultiCare 2026-11-12):
-`kars-collection-diabetes-bundle.FromMultiCare.20261112.json` (CMS122) and
-`kars-collection-bloodpressure-bundle.FromMultiCare.20261112.json` (CMS165).
+[`docs/kars-collection-diabetes-bundle.FromMultiCare.20261112.json`](kars-collection-diabetes-bundle.FromMultiCare.20261112.json) (CMS122) and
+[`docs/kars-collection-bloodpressure-bundle.FromMultiCare.20261112.json`](kars-collection-bloodpressure-bundle.FromMultiCare.20261112.json) (CMS165).
 *(Earlier versions of this section **inferred** a "two engines" split, with an
 external eCQM engine making File 2. The KARS bundles contradict that inference; see
 below.)*
@@ -188,6 +188,7 @@ exactly.
 
 ```
 start               trigger: named-event "encounter-end"; check-reportable runs 60 s later
+                    (upstream: 24 h; see "Upstream source and local edits" below)
  └► check-reportable  applicability: a Condition exists in the trigger ValueSet
      │                  CMS122: Diabetes               2.16.840.1.113883.3.464.1003.103.12.1001 (370 codes)
      │                  CMS165: Essential Hypertension 2.16.840.1.113883.3.464.1003.104.12.1011 (17 codes)
@@ -202,6 +203,35 @@ start               trigger: named-event "encounter-end"; check-reportable runs 
               ├ validate-eicr  (CMS122 declares output profile eicr-document-bundle)
               └ submit-eicr    output profile eicr-document-bundle ───────────────► File 3
 ```
+
+#### Upstream source and local edits
+
+The KARS bundles are published in **[`cqframework/aphl-chronic-ig`](https://github.com/cqframework/aphl-chronic-ig)**,
+the source repo of the APHL Chronic Disease Surveillance IG. That IG is built on
+build.fhir.org as `cqf.aphl.chronic-ds`, at version **0.1.0** as of 2026-11.
+The fixtures' Measure canonicals are still pinned at `|0.0.002`. Our two files are:
+
+| Local file | Upstream file (branch `main`) |
+|---|---|
+| [`docs/kars-collection-diabetes-bundle.FromMultiCare.20261112.json`](kars-collection-diabetes-bundle.FromMultiCare.20261112.json) | `archive-2025/kars/kars-collection-diabetes-bundle.json` |
+| [`docs/kars-collection-bloodpressure-bundle.FromMultiCare.20261112.json`](kars-collection-bloodpressure-bundle.FromMultiCare.20261112.json) | `archive-2025/kars/kars-collection-bloodpressure-bundle.json` |
+
+The upstream folder also has `depression` (CMS2) and `seenpatients` bundles, plus
+`transaction`-type versions of each. The repo includes `_refreshKarsBundles.sh`,
+the script that assembles the bundles from the IG source. Every resource carries
+`cqfm-softwaresystem → Device/cqf-tooling`, which shows that CQF tooling built them.
+
+**Local edits (verified by diff against upstream, 2026-11-16).** Both files have the
+same 74 resources as upstream, in the same order. Apart from the edits below they
+are identical to upstream. The edits adapt the bundles for the eCRNow deployment.
+Neither file says who made them (presumably MultiCare or drajer).
+
+| # | Edit | Where | Effect |
+|---|---|---|---|
+| 1 | `start → check-reportable` delay changed from **24 h** to **60 s** | PlanDefinition `start.relatedAction.offsetDuration` | eCRNow checks reportability one minute after encounter-end instead of a day later. This is likely a change for testing or demos. |
+| 2 | **`us-ph-fhirquerypattern-extension`** added, e.g. `Patient/{{context.patientId}}`, `Encounter/{{context.encounterId}}`, `Observation?patient=Patient/{{context.patientId}}`, `MedicationRequest?patient=…&intent=order` | PlanDefinition action inputs; the `dataRequirement`s of the Measure's `effective-data-requirements` and the Libraries | eCRNow's **query templates** ("Loading Queries"): the FHIR searches it runs against the source EHR to collect data. These decide what ends up in the eICR (File 3). |
+| 3 | **`us-ph-relateddata-extension` = `"measurereport"`** added | `report-ds` input and `create-eicr`'s MeasureReport input | Links those inputs to `evaluate-measure`'s output, so the MeasureReport flows into the reporting gate and into the eICR. |
+| 4 | Extra `us-ph-relateddata-extension` / `cqf-referencedEntity` entries | Two Libraries' `dataRequirement`s, **CMS165 bundle only** | Further context bindings (for example `Encounter/{{context.encounterId}}`). They aren't in the CMS122 bundle; why is unknown. |
 
 What this establishes about each file:
 
@@ -304,7 +334,8 @@ actual fixtures, worth keeping in mind:
    the sample committed here.
 6. **The generating specification is not in the PDF.** The KARS knowledge bundles
    (PlanDefinition + Measure + Libraries + ValueSets) that eCRNow 4.0.4 executed
-   were received separately (§3, "How these three files were generated"). They also
+   were received separately. They are locally edited copies of bundles in
+   `cqframework/aphl-chronic-ig` (§3, "Upstream source and local edits"). They also
    contain the `Measure|0.0.002` resources that the HL7 validator currently cannot
    resolve (see `known-validation-issues.md`).
 

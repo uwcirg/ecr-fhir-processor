@@ -1,5 +1,5 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/007-observation-component-values/plan.md
+at specs/008-stratum-prune-reporting/plan.md
 <!-- SPECKIT END -->

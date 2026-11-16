@@ -133,8 +133,10 @@ only where no lever exists (see [`known-validation-issues.md`](known-validation-
   clinical content. The transform is **non-fabricating** (it only removes, never invents a
   `value`/`component`), idempotent, and runs on the write path **before** the `output/`
   mirror so the mirrored bytes equal the PUT bytes. Every removal is logged at WARNING with
-  the population counts the stratum carried, and re-validating the transformed output
-  through the HL7 gate introduces **no new signature** vs. `test/conformance-baseline.sigs`.
+  its location (`group[<i>] stratifier <id>`) and the population counts the stratum carried;
+  the RunSummary per-file note reports strata removed, strata kept, and stratifiers left with
+  no strata (e.g. `pruned 1 mrp-2 stratum(s), kept 4, 1 stratifier(s) left empty`); and
+  re-validating the transformed output through the HL7 gate introduces **no new signature** vs. `test/conformance-baseline.sigs`.
   MeasureReports are thus made storable **rather than deferred** — replacing the earlier
   "land MeasureReports in a later run once Aidbox is relaxed" stance.
 - **Cause 4 — base-FHIR `ext-1` invariant** (the CMS2 eICR Composition + its message

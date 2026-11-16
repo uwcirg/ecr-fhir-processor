@@ -291,6 +291,26 @@ def plan_collection_puts(bundle: dict) -> list[PutUnit]:
 # --------------------------------------------------------------------------- #
 
 
+@dataclass(frozen=True)
+class StratumPruneResult:
+    """Counts from one mrp-2 stratum prune (008 data-model.md, contract R1–R4).
+
+    ``removed``: strata dropped (neither ``value`` nor ``component``). ``kept``: strata
+    remaining afterwards, across every stratifier of every processed report. ``emptied``:
+    stratifiers that had >=1 stratum before and none after (their ``stratum`` property was
+    deleted). Invariants: ``emptied <= removed``; ``removed + kept`` = strata before the
+    prune. Summable with ``+`` so nested MeasureReports in one Bundle aggregate.
+    """
+
+    removed: int = 0
+    kept: int = 0
+    emptied: int = 0
+
+    def __add__(self, other: StratumPruneResult) -> StratumPruneResult:
+        return StratumPruneResult(self.removed + other.removed, self.kept + other.kept,
+                                  self.emptied + other.emptied)
+
+
 def _summarize_stratum_populations(stratum: dict) -> str:
     """Render a removed stratum's population counts for the audit WARNING (FR-006).
 
@@ -312,20 +332,46 @@ def _summarize_stratum_populations(stratum: dict) -> str:
     return ", ".join(parts) if parts else "(no populations)"
 
 
-def prune_measurereport_strata(report: dict, source_filename: str) -> int:
+def _stratifier_label(stratifier: dict, index: int) -> str:
+    """A human-readable identifier for a stratifier in the removal WARNING (008 R6).
+
+    First available of: ``id``; ``code=<first coding.code>`` across ``stratifier.code``
+    (R4: a list of CodeableConcept; a lone dict is tolerated); ``text=<first code.text>``;
+    else ``#<index>`` (zero-based position within its group). Never empty.
+    """
+    if stratifier.get("id"):
+        return str(stratifier["id"])
+    concepts = stratifier.get("code") or []
+    if isinstance(concepts, dict):
+        concepts = [concepts]
+    concepts = [c for c in concepts if isinstance(c, dict)]
+    for concept in concepts:
+        for coding in concept.get("coding", []) or []:
+            if isinstance(coding, dict) and coding.get("code"):
+                return f"code={coding['code']}"
+    for concept in concepts:
+        if concept.get("text"):
+            return f"text={concept['text']}"
+    return f"#{index}"
+
+
+def prune_measurereport_strata(report: dict, source_filename: str) -> StratumPruneResult:
     """Remove every stratifier stratum lacking both ``value`` and ``component`` (mrp-2).
 
-    Mutates ``report`` in place; returns the number of strata removed. A stratum is
+    Mutates ``report`` in place; returns a :class:`StratumPruneResult`: ``removed`` (the
+    strata removed, 008 contract R1), ``kept`` (strata remaining across all stratifiers,
+    R2), and ``emptied`` (stratifiers this call left with no strata, R3). A stratum is
     removed **iff** ``value is None and not component`` (contract C1) — a stratum with
     ``value`` xor ``component`` is left untouched (C2). Every other element of the
     MeasureReport is unchanged (C3); empty stratum/stratifier/group arrays are left in
     place (C4 — the transform removes strata, never stratifiers). Idempotent (C5). Never
     fabricates — it only removes (C9). Each removal logs a WARNING via ``log_remediation``
-    carrying the removed stratum's population counts (C6, FR-006).
+    carrying the removed stratum's population counts (C6, FR-006) and its location:
+    ``group[<i>]`` plus a :func:`_stratifier_label` (008 contract R5).
     """
-    removed = 0
-    for group in report.get("group", []) or []:
-        for stratifier in group.get("stratifier", []) or []:
+    removed = kept_total = emptied = 0
+    for group_index, group in enumerate(report.get("group", []) or []):
+        for stratifier_index, stratifier in enumerate(group.get("stratifier", []) or []):
             strata = stratifier.get("stratum")
             if not isinstance(strata, list):
                 continue
@@ -336,8 +382,11 @@ def prune_measurereport_strata(report: dict, source_filename: str) -> int:
                     log_remediation(
                         REMEDIATION_MRP2_STRATUM_PRUNE,
                         "Removed value/component-less MeasureReport stratum "
-                        "(base-FHIR mrp-2) from %s; carried populations: %s",
-                        source_filename, _summarize_stratum_populations(stratum),
+                        "(base-FHIR mrp-2) from %s at group[%d] stratifier %s; "
+                        "carried populations: %s",
+                        source_filename, group_index,
+                        _stratifier_label(stratifier, stratifier_index),
+                        _summarize_stratum_populations(stratum),
                     )
                 else:
                     kept.append(stratum)
@@ -347,22 +396,34 @@ def prune_measurereport_strata(report: dict, source_filename: str) -> int:
             # itself a base-FHIR violation ("Array cannot be empty — the property should
             # not be present if it has no values"), which would introduce a new HL7-gate
             # signature (FR-009). A stratifier with no `stratum` satisfies mrp-2 vacuously.
+            kept_total += len(kept)
             if len(kept) != len(strata):
                 if kept:
                     stratifier["stratum"] = kept
                 else:
+                    # Emptied BY this prune (it had >=1 stratum); a stratifier that was
+                    # already empty never reaches here, so it isn't counted (008 R3).
                     del stratifier["stratum"]
-    return removed
+                    emptied += 1
+    return StratumPruneResult(removed=removed, kept=kept_total, emptied=emptied)
 
 
-def prune_nested_measurereports(bundle: dict, source_filename: str) -> int:
+def _stratum_prune_note(result: StratumPruneResult) -> str:
+    """The RunSummary per-file note for a Cause 2 prune (008 research R3, contract R7)."""
+    return (f"pruned {result.removed} mrp-2 stratum(s), kept {result.kept}, "
+            f"{result.emptied} stratifier(s) left empty")
+
+
+def prune_nested_measurereports(bundle: dict,
+                                source_filename: str) -> StratumPruneResult:
     """Apply :func:`prune_measurereport_strata` to every MeasureReport in ``bundle``.
 
     Walks ``bundle.entry[*].resource``, recursing into nested Bundles (e.g. the eICR
     document Bundle inside a message Bundle), so a message Bundle carrying an unpruned
-    MeasureReport is not rejected whole (contract C7, FR-005). Returns total strata removed.
+    MeasureReport is not rejected whole (contract C7, FR-005). Returns the field-wise sum of
+    every nested report's :class:`StratumPruneResult` (008 contract R4).
     """
-    total = 0
+    total = StratumPruneResult()
 
     def walk(node: dict) -> None:
         nonlocal total
@@ -372,7 +433,7 @@ def prune_nested_measurereports(bundle: dict, source_filename: str) -> int:
                 continue
             rtype = resource.get("resourceType")
             if rtype == "MeasureReport":
-                total += prune_measurereport_strata(resource, source_filename)
+                total = total + prune_measurereport_strata(resource, source_filename)
             elif rtype == "Bundle":
                 walk(resource)
 
@@ -848,11 +909,11 @@ class Pipeline:
         self._stamp(report, source_filename)
         # Cause 2 transform on the write path, BEFORE the mirror, so output/ bytes equal
         # the PUT bytes (FR-008, contract C8). The test/input fixture is never touched.
-        removed = prune_measurereport_strata(report, source_filename)
+        mrp2 = prune_measurereport_strata(report, source_filename)
         self._maybe_mirror(measure, source_filename, report)
         outcome = self._guarded_put(KIND_MEASURE_REPORT, "MeasureReport",
                                     report.get("id"), report, source_filename)
-        _record_remediation(outcome, removed, f"pruned {removed} mrp-2 stratum(s)")
+        _record_remediation(outcome, mrp2.removed, _stratum_prune_note(mrp2))
         return [outcome]
 
     def _process_message(self, bundle: dict, source_filename: str,
@@ -873,14 +934,13 @@ class Pipeline:
         # equal the PUT bytes (C8). Trigger-code flag extensions live only in the promoted
         # Composition (the same object nested in the document Bundle), so the single
         # in-place walk over `bundle` also cleans the standalone Composition PUT below.
-        removed_mrp2 = prune_nested_measurereports(bundle, source_filename)
+        mrp2 = prune_nested_measurereports(bundle, source_filename)
         removed_tc = prune_empty_trigger_code_extensions(bundle, source_filename)
         self._maybe_mirror(measure, source_filename, bundle)
 
         outcomes = [self._guarded_put(KIND_MESSAGE, "Bundle", bundle.get("id"),
                                       bundle, source_filename)]
-        _record_remediation(outcomes[0], removed_mrp2,
-                            f"pruned {removed_mrp2} mrp-2 stratum(s)")
+        _record_remediation(outcomes[0], mrp2.removed, _stratum_prune_note(mrp2))
         _record_remediation(outcomes[0], removed_tc,
                             f"removed {removed_tc} empty trigger-code extension(s)")
         if composition is not None:

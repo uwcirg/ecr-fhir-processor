@@ -1,7 +1,38 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.2.0 → 1.3.0 (latest)
+Version change: 1.3.0 → 1.3.1 (latest)
+Rationale (1.3.1, PATCH): Clarifying wording only. Principle IV's "Input shape" now
+separates eCRNow's inputs/outputs from process.py's. The MeasureReport is an eCRNow
+OUTPUT (the KAR's evaluate-measure action), not an "expected evaluation result". The eCR
+message Bundle is an eCRNow OUTPUT (create-eicr → validate-eicr → submit-eicr), the unit
+eCRNow submits to a public health agency. The collection Bundle is an export of the
+EHR-side patient data eCRNow queried, neither an eCRNow input nor an eCRNow output. All
+three remain process.py inputs. Adds a terminology note: "submit" means process.py PUTting
+to the analytics FHIR server unless the text says eCRNow. No rule is added, removed, or
+redefined; scope and obligations are unchanged.
+
+Modified principles:
+  - IV. Multi-Measure / Multi-Population Input Coverage: "Input shape" bullets reworded
+    (title unchanged); added a "Terminology" bullet pointing to docs/input-data.md
+    ("Two pipelines: eCRNow's inputs and outputs vs. process.py's").
+
+Added sections: none. Removed sections: none.
+
+Templates requiring updates:
+  - .specify/templates/plan-template.md  ✅ aligned (no input/output terminology)
+  - .specify/templates/spec-template.md  ✅ aligned
+  - .specify/templates/tasks-template.md ✅ aligned
+  - .specify/templates/checklist-template.md ✅ aligned
+
+Downstream artifacts:
+  - docs/input-data.md ✅ already updated ("Two pipelines" section; File 1–3 headings)
+  - README.md ✅ aligned ("submit" there already means process.py → FHIR server)
+  - specs/00x-*/ (historical feature specs) — left as-is; they record past decisions.
+
+Deferred TODOs: none.
+
+----- Prior amendment (1.2.0 → 1.3.0, MINOR) -----
 Rationale (1.3.0, MINOR): Adds one new principle (VIII. Input Pre-Processing for Aidbox
 Storability). Storing the resources in the target Aidbox server is now an explicit project
 goal, so the project MUST pre-process/remediate input resources enough to be *stored*
@@ -321,16 +352,31 @@ measure and by population outcome, as described in
 
 **Input shape (per the test-data documentation):**
 
-- Input is a FHIR R4 `Bundle` (type `collection`) of 3–7 resources: always
-  `Patient`, `Encounter`, `Condition`; usually `Observation`; sometimes
-  `MedicationRequest`, `ServiceRequest`, `Procedure`. Each scenario also ships a
-  `MeasureReport` (expected evaluation result) and, for in-population scenarios, an
-  eCR reporting `Bundle` (type `message`): a `MessageHeader` referencing a nested
-  content Bundle that combines the input resources with the MeasureReport.
+All of the files below are **process.py inputs**. They come from an upstream eCRNow
+deployment, and they are not all eCRNow outputs:
+
+- **Collection `Bundle`** (`<scenario_id>.json`, type `collection`) of 3–7 resources:
+  always `Patient`, `Encounter`, `Condition`; usually `Observation`; sometimes
+  `MedicationRequest`, `ServiceRequest`, `Procedure`. It is an **export of the
+  EHR-side patient data that eCRNow queried**, neither an eCRNow input nor an eCRNow
+  output, and it is the authoritative copy of the clinical resources.
+- **`MeasureReport`** (`MeasureReport_<uuid>.json`): an **eCRNow output**, produced by
+  the KAR's `evaluate-measure` action. It is the evaluation eCRNow actually computed,
+  not an expected result to test against.
+- **eCR message `Bundle`** (`Bundle_<uuid>.json`, type `message`), in-population scenarios
+  only: an **eCRNow output**, produced by the KAR's `create-eicr` → `validate-eicr` →
+  `submit-eicr` actions. eCRNow submits it to a public health agency. It holds a
+  `MessageHeader` referencing a nested eICR document Bundle that re-contains the
+  clinical resources, plus a collection Bundle wrapping the MeasureReport.
 - Scenarios are grouped per measure into a **Standard** folder (patient in the
-  Initial Population — input Bundle + MeasureReport + eCR message Bundle) and a
-  **Not-In-Population** folder (patient outside IP — input Bundle + MeasureReport
+  Initial Population — collection Bundle + MeasureReport + eCR message Bundle) and a
+  **Not-In-Population** folder (patient outside IP — collection Bundle + MeasureReport
   only, all population counts zero, no eCR generated).
+- **Terminology:** in this constitution and the specs, "input" and "output" mean
+  process.py's, and "submit" means process.py PUTting resources to the analytics FHIR
+  server, unless the text names eCRNow. eCRNow's own submission of the eCR message
+  Bundle to public health is a separate, upstream step. See `docs/input-data.md`,
+  "Two pipelines: eCRNow's inputs and outputs vs. `process.py`'s".
 
 **Supported scope:**
 
@@ -658,4 +704,4 @@ reasoning in the relevant spec or PR — do not silently deviate.
 - When a principle conflicts with a practical constraint, document the exception and
   the reasoning in the relevant spec or PR.
 
-**Version**: 1.3.0 | **Ratified**: 2026-06-09 | **Last Amended**: 2026-07-01
+**Version**: 1.3.1 | **Ratified**: 2026-06-09 | **Last Amended**: 2026-11-16

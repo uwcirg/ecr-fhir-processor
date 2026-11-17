@@ -11,6 +11,56 @@ For *what the processor does* with these files, see
 
 ---
 
+## Two pipelines: eCRNow's inputs and outputs vs. `process.py`'s
+
+Two separate systems handle this data, and each has its own inputs and outputs.
+**This document's "input" means `process.py`'s input** (everything under
+`test/input/`), unless it says *eCRNow input* or *eCRNow output*.
+
+```
+      ┌──────────────── eCRNow (upstream; run by the data supplier) ────────────────┐
+      │ inputs:  KAR bundle (PlanDefinition + Measure + Libraries + ValueSets)       │
+      │          encounter-end notifications                                         │
+      │          patient data pulled from the EHR's FHIR API (the KAR's query        │
+      │          patterns), never handed to eCRNow as a file                         │
+      │ outputs: MeasureReport ─────────────────────────────────────► File 2        │
+      │          eICR message Bundle ───────────────────────────────► File 3        │
+      │            └─ also sent ("submit-eicr") to the public-health endpoint        │
+      │               configured in eCRNow                                           │
+      │          debug files (TriggerQueryBundle_*, create-report_*, …)              │
+      └──────────────────────────────────────────────────────────────────────────────┘
+      EHR / drajer FHIR server ── export of the patient's resources ─► File 1
+
+      ┌──────────────── process.py (this repo) ─────────────────────────────────────┐
+      │ inputs:  Files 1, 2 and 3 under test/input/ (or input/), plus config.json   │
+      │ outputs: independent PUTs to the analytics FHIR server (Aidbox)             │
+      │          the output/ mirror of what was (or, with --dry-run, would be) sent │
+      │          log/ and the RunSummary                                            │
+      └──────────────────────────────────────────────────────────────────────────────┘
+```
+
+| File | For eCRNow | For `process.py` |
+|---|---|---|
+| **1.** `<scenario_id>.json` (collection Bundle) | **Neither an input nor an output.** It's an export of the patient data on the drajer FHIR server, the data eCRNow *queried*. It's the closest thing we have to eCRNow's input. | Input |
+| **2.** `MeasureReport_<uuid>.json` | **Output** of the KAR's `evaluate-measure` action | Input |
+| **3.** `Bundle_<uuid>.json` (eICR message Bundle) | **Output** of `create-eicr` → `validate-eicr` → `submit-eicr` | Input |
+
+**"Submit" means two different things.**
+- **eCRNow submits** File 3 to a **public health agency** (the `submit-eicr` action;
+  FHIR `$process-message`, REST, or Direct transport, as configured in eCRNow). That
+  is the sense in which File 3 is a public-health *submission*. The fixtures don't
+  record where it went: `MessageHeader.destination` is absent, and only the drajer
+  `source`/`sender` are given.
+- **`process.py` submits** (PUTs) Files 1–3 to **our analytics FHIR server**. That is
+  a separate, downstream step, and our README and specs mean this sense.
+
+The KAR bundles and eCRNow's own debug output are covered in §3, "How these three
+files were generated". eCRNow's own outputs (MeasureReports, eICRs, debug files) are
+written to its `bsa.output.directory`. A file there isn't a `process.py` input until
+someone places it under `input/`.
+
+---
+
 ## 1. Patient populations (the reporting funnel)
 
 Public-health researchers reading this data are usually computing **proportions** — a
@@ -30,7 +80,7 @@ to the populations.
 |---|---|---|---|
 | **Total Patient Population** | Anyone ever seen at the hospital. | *None for most of them.* We only hold the subset that meets the trigger criteria below — true for both the test fixtures **and** real data. | n/a |
 | **Seen/Triggered Patients** | Those who had an encounter during the target time period **and** have a `Condition` in the measure's trigger value set (Diabetes for CMS122, Essential Hypertension for CMS165; see §3 "How these three files were generated"). | A FHIR **collection Bundle** (line-level patient/encounter data) **+ a MeasureReport** indicating which sub-population (below) the patient is in. | Every scenario folder under `test/input/` — both `standard/` **and** `not-in-population/`. |
-| **Initial Population** | Triggered patients who *also* meet the Measure's additional filtering (age, encounter, and diagnosis criteria). | Everything above, **plus an eCR `Bundle`** (the eICR message / submission unit) added alongside. | The `standard/` folders — the **three-file** set (§3). NIP folders are triggered but *fail* IP, so they get **no** eCR. *(Strictly, the eCR is gated on **Denominator count > 0**, not IP; for these measures Denominator = IP, so the result is the same. A patient with a Denominator Exclusion still gets an eCR.)* |
+| **Initial Population** | Triggered patients who *also* meet the Measure's additional filtering (age, encounter, and diagnosis criteria). | Everything above, **plus an eCR `Bundle`** (the eICR message eCRNow sends to public health) added alongside. | The `standard/` folders — the **three-file** set (§3). NIP folders are triggered but *fail* IP, so they get **no** eCR. *(Strictly, the eCR is gated on **Denominator count > 0**, not IP; for these measures Denominator = IP, so the result is the same. A patient with a Denominator Exclusion still gets an eCR.)* |
 | **Denominator** | **Everyone** in the Initial Population. | (same artifacts as Initial Population) | The `denominator` population in the MeasureReport — set to `true`/`1` on **all** IP records. |
 | **Numerator** | The subset of the Initial Population that **eCRNow determined matches the CMS measure's criteria**. | (same artifacts as Initial Population) | The `numerator` population in the MeasureReport set to `true`/`1`. |
 
@@ -49,13 +99,14 @@ test/input/
   <measure>/
     standard/              # patient qualifies for the Initial Population → eCR generated
       <scenario_id>/
-        <scenario_id>.json            # collection Bundle  (the input data)
-        MeasureReport_<uuid>.json     # expected evaluation result
-        Bundle_<uuid>.json            # eCR message Bundle (submission unit)
+        <scenario_id>.json            # File 1: collection Bundle (export of the patient's EHR data)
+        MeasureReport_<uuid>.json     # File 2: eCRNow output, the measure evaluation result
+        Bundle_<uuid>.json            # File 3: eCRNow output, the eICR message sent to public health
     not-in-population/     # patient does NOT meet Initial Population → no eCR
       <scenario_id>/
-        <scenario_id>.json            # collection Bundle  (the input data)
-        MeasureReport_<uuid>.json     # all population counts = 0
+        <scenario_id>.json            # File 1: collection Bundle (export of the patient's EHR data)
+        MeasureReport_<uuid>.json     # File 2: eCRNow output, all population counts = 0
+# All files under test/input/ are process.py inputs (see "Two pipelines" above).
 ```
 
 `measure` and `population` are **derived from the path**, not from file contents
@@ -104,9 +155,12 @@ together; every file refers to the same `Patient/<GUID>`.
         only the Composition in [1] is new (this repo will save it additionally as an independent resource).
 ```
 
-### File 1 — `<scenario_id>.json` (the collection Bundle) — **the input data**
+### File 1 — `<scenario_id>.json` (the collection Bundle) — **the patient's clinical data**
+*An export of the EHR-side data eCRNow queried. It is neither an eCRNow input nor an
+eCRNow output, but it is the authoritative clinical source among the three (see File 3).*
 - `Bundle.type = "collection"`, **no `entry.request`** (not directly transactable;
-  the processor converts it to a transaction of PUTs — see research.md D2).
+  the processor splits it into independent per-resource PUTs, never a `transaction`;
+  see research.md D2).
 - Always contains: **Patient, Condition, Encounter, Observation, Practitioner,
   Organization, Location.** May contain extras per scenario (CMS165
   `bulk_dial_high` adds a second `Condition` and a `Procedure` for dialysis).
@@ -114,7 +168,9 @@ together; every file refers to the same `Patient/<GUID>`.
   reuse **identical GUIDs across scenarios and across the nested eICR** (see §5).
   *(The supplier PDF §3 omits these three resources entirely — see §6.)*
 
-### File 2 — `MeasureReport_<uuid>.json` — **the expected evaluation result**
+### File 2 — `MeasureReport_<uuid>.json` — **eCRNow output: the measure evaluation result**
+*Produced by the KAR's `evaluate-measure` action. It's what eCRNow actually computed,
+not an "expected" result to test against.*
 - `subject → Patient/<same GUID>` as File 1.
 - `measure →` the measure canonical URL + version (table above).
 - `evaluatedResource[] →` the **same** Encounter / Condition / Observation GUIDs
@@ -128,7 +184,10 @@ together; every file refers to the same `Patient/<GUID>`.
   | CMS122 `VAR_NUM_DM_CKD_Insulin_PoorControl` | 1 | 1 | 1 | 0 |
   | CMS165 `bulk_dial_high_00042`             | 1 | 1 | 0 | 1 |
 
-### File 3 — `Bundle_<uuid>.json` (the eCR message Bundle) — **the submission unit**
+### File 3 — `Bundle_<uuid>.json` (the eCR message Bundle) — **eCRNow output: the eICR message sent to public health**
+*Produced by the KAR's `create-eicr` → `validate-eicr` → `submit-eicr` actions. It's the
+unit eCRNow **submits to a public health agency**; that's a separate step from
+`process.py` PUTting it to our analytics server (see "Two pipelines" above).*
 - `Bundle.type = "message"`. The outer `Bundle.id` is a **per-case GUID** (matches
   the filename). Three entries:
   1. **`MessageHeader`** — `eventCoding = eicr-case-report-message`;

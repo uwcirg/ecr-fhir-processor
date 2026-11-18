@@ -54,10 +54,11 @@ Two separate systems handle this data, and each has its own inputs and outputs.
 - **`process.py` submits** (PUTs) Files 1–3 to **our analytics FHIR server**. That is
   a separate, downstream step, and our README and specs mean this sense.
 
-The KAR bundles and eCRNow's own debug output are covered in §3, "How these three
-files were generated". eCRNow's own outputs (MeasureReports, eICRs, debug files) are
-written to its `bsa.output.directory`. A file there isn't a `process.py` input until
-someone places it under `input/`.
+The KAR bundles are covered in §3, "How these three files were generated". How
+eCRNow runs them (what it requires of its inputs, per-encounter scheduling, the files
+it writes to `bsa.output.directory`, and how to find a missing eICR) is covered in
+[`ecrnow-operations.md`](ecrnow-operations.md). A file eCRNow writes isn't a
+`process.py` input until someone places it under `input/`.
 
 ---
 

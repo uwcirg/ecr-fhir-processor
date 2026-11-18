@@ -331,6 +331,8 @@ scripts/validate.sh        # wraps validator_cli.jar with versioned -ig packages
 ```
 
 See [`docs/input-data.md`](docs/input-data.md) for the input-data reference,
+[`docs/ecrnow-operations.md`](docs/ecrnow-operations.md) for how the upstream eCRNow
+run produces those files,
 [`specs/001-mvp-fhir-processor/quickstart.md`](specs/001-mvp-fhir-processor/quickstart.md)
 for the full validation guide, and
 [`.specify/memory/constitution.md`](.specify/memory/constitution.md) for the governing

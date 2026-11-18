@@ -1,8 +1,27 @@
 """RunSummary stratification by FHIR resource type (D8, _report_summary)."""
 
+import json
+import tempfile
 import unittest
 
 import process
+from tests import REPO_ROOT
+
+
+def _dry_pipeline(output_dir):
+    """A dry-run Pipeline (no server, no mirror), as in tests/test_rerun.py."""
+    return process.Pipeline(
+        config=process.RunConfig(software={}, server={}, ig_versions={},
+                                 paths=dict(process.DEFAULT_PATHS), raw={}),
+        version="test",
+        timestamp=process.processing_timestamp(),
+        run_date="2026-11-16",
+        dry_run=True,
+        output_dir=output_dir,
+        write_mirror=False,
+        client=None,
+        type_filter=process.TypeFilter(),
+    )
 
 
 def _outcome(action, status):
@@ -165,3 +184,37 @@ class TransformedCounterTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PruneSummaryNoteTest(unittest.TestCase):
+    """008 contract R7/R9 (scenario 10, SC-001): the per-file note carries all 3 counts."""
+
+    NOTE = "pruned 1 mrp-2 stratum(s), kept 4, 1 stratifier(s) left empty"
+    SCENARIO = (REPO_ROOT / "test" / "input" / "controllable-bp" / "standard"
+                / "CMS165_bulk_dial_high_00042")
+    MR = SCENARIO / "MeasureReport_ae8ea7e3-ff01-4e9c-a736-4f7d09ade91d.json"
+    MSG = SCENARIO / "Bundle_43914e77-6cd5-451f-992e-e0474417a2b9.json"
+
+    def _run(self, path, kind, data=None):
+        with tempfile.TemporaryDirectory() as d:
+            pipe = _dry_pipeline(d)
+            data = data if data is not None else json.loads(path.read_text())
+            return pipe.process(data, kind, path.name, "controllable-bp")
+
+    def test_standalone_measurereport_note(self):
+        [outcome] = self._run(self.MR, process.KIND_MEASURE_REPORT)
+        self.assertIn(self.NOTE, outcome.detail)
+        self.assertEqual(outcome.remediations_applied, 1)
+        self.assertEqual(outcome.status, "remediated")
+
+    def test_message_bundle_note(self):
+        outcomes = self._run(self.MSG, process.KIND_MESSAGE)
+        self.assertIn(self.NOTE, outcomes[0].detail)
+
+    def test_clean_measurereport_has_no_note(self):  # scenario 11, FR-007/SC-003
+        data = json.loads(self.MR.read_text())
+        process.prune_measurereport_strata(data, self.MR.name)  # pre-clean it
+        [outcome] = self._run(self.MR, process.KIND_MEASURE_REPORT, data=data)
+        self.assertNotIn("mrp-2", outcome.detail)
+        self.assertEqual(outcome.remediations_applied, 0)
+        self.assertEqual(outcome.status, "succeeded")

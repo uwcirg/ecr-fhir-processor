@@ -174,7 +174,9 @@ REMEDIATION: aidbox-cause-1-reference-skip
   the `output/` mirror so the mirrored bytes equal the PUT bytes (FR-008). The
   `test/input/` fixtures are never modified. Every removal is logged at WARNING via
   `log_remediation(REMEDIATION_MRP2_STRATUM_PRUNE, …)` **including the removed stratum's
-  population counts** (FR-006), so no count is silently dropped. Re-validated through the
+  population counts** (FR-006) and its location (`group[<i>] stratifier <id|code|text|#index>`,
+  feature 008), so no count is silently dropped. The RunSummary per-file note reports strata
+  removed, kept, and stratifiers left empty. Re-validated through the
   HL7 gate the transformed output introduces **no new signature** vs.
   `test/conformance-baseline.sigs` (FR-009).
 

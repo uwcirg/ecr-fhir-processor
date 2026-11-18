@@ -24,6 +24,11 @@ def prune_nested_measurereports(bundle: dict, source_filename: str) -> int:
     Bundles) and apply prune_measurereport_strata to each. Returns total strata removed."""
 ```
 
+> **Amended by 008** ([`specs/008-stratum-prune-reporting/contracts/stratum-prune-reporting.md`](../../008-stratum-prune-reporting/contracts/stratum-prune-reporting.md)):
+> both functions now return a `StratumPruneResult(removed, kept, emptied)` instead of an `int`
+> (`removed` is the same count described here). Each removal WARNING additionally names its
+> location as `group[<i>] stratifier <label>`. C1–C9 are unchanged.
+
 ## Inputs
 
 - `report` / `bundle`: a parsed FHIR resource dict (already stamped by `_stamp`).

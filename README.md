@@ -63,7 +63,7 @@ cp config.example.json config.json
 |-----|----------|-------|
 | `software.name`, `software.identifier_system`, `software.identifier_value` | yes | Provenance identity. |
 | `server.base_url`, `server.token_endpoint`, `server.client_id`, `server.client_secret` | yes (unless `--dry-run`) | OAuth2 client-credentials. **Secrets — never commit.** |
-| `ig_versions{}` | recommended | IG → version for the conformance gate, mirroring the test-data supplier's pinned set (`hl7.fhir.us.core`, `hl7.fhir.us.qicore`, `hl7.fhir.us.cqfmeasures`, `hl7.fhir.us.davinci-deqm`, `hl7.fhir.us.ecr`, `hl7.fhir.us.ph-library`). |
+| `ig_versions{}` | recommended | Implementation Guide → version for the conformance gate, mirroring the test-data supplier's pinned set (`hl7.fhir.us.core`, `hl7.fhir.us.qicore`, `hl7.fhir.us.cqfmeasures`, `hl7.fhir.us.davinci-deqm`, `hl7.fhir.us.ecr`, `hl7.fhir.us.ph-library`). |
 | `paths{input_dir,output_dir,log_dir}` | optional | Defaults `input`/`output`/`log`. |
 
 > The software **version is not a config field** — it is derived at runtime from
@@ -133,8 +133,10 @@ only where no lever exists (see [`known-validation-issues.md`](known-validation-
   clinical content. The transform is **non-fabricating** (it only removes, never invents a
   `value`/`component`), idempotent, and runs on the write path **before** the `output/`
   mirror so the mirrored bytes equal the PUT bytes. Every removal is logged at WARNING with
-  the population counts the stratum carried, and re-validating the transformed output
-  through the HL7 gate introduces **no new signature** vs. `test/conformance-baseline.sigs`.
+  its location (`group[<i>] stratifier <id>`) and the population counts the stratum carried;
+  the RunSummary per-file note reports strata removed, strata kept, and stratifiers left with
+  no strata (e.g. `pruned 1 mrp-2 stratum(s), kept 4, 1 stratifier(s) left empty`); and
+  re-validating the transformed output through the HL7 gate introduces **no new signature** vs. `test/conformance-baseline.sigs`.
   MeasureReports are thus made storable **rather than deferred** — replacing the earlier
   "land MeasureReports in a later run once Aidbox is relaxed" stance.
 - **Cause 4 — base-FHIR `ext-1` invariant** (the CMS2 eICR Composition + its message
@@ -329,6 +331,8 @@ scripts/validate.sh        # wraps validator_cli.jar with versioned -ig packages
 ```
 
 See [`docs/input-data.md`](docs/input-data.md) for the input-data reference,
+[`docs/ecrnow-operations.md`](docs/ecrnow-operations.md) for how the upstream eCRNow
+run produces those files,
 [`specs/001-mvp-fhir-processor/quickstart.md`](specs/001-mvp-fhir-processor/quickstart.md)
 for the full validation guide, and
 [`.specify/memory/constitution.md`](.specify/memory/constitution.md) for the governing

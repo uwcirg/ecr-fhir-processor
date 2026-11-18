@@ -35,6 +35,12 @@ prevent that:
   independent of storage. Invariant: `transformed >= remediated`.
 - `transformed` does **not** affect the exit code.
 
+> **Amended by 008** ([`specs/008-stratum-prune-reporting/contracts/stratum-prune-reporting.md`](../../008-stratum-prune-reporting/contracts/stratum-prune-reporting.md)):
+> the Cause 2 per-file detail note is now
+> `pruned {removed} mrp-2 stratum(s), kept {kept}, {emptied} stratifier(s) left empty`.
+> `remediations_applied` still receives the **removed** count, so `remediated`, `transformed`,
+> the per-type rows, and the exit code are unchanged.
+
 ## Remediation logging & documentation audit (FR-013)
 
 Every applied lever/transform is logged via `log_remediation(key, …)` (WARNING) with a `key` drawn

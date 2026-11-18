@@ -80,7 +80,7 @@ class ReRunAfterRemediationTest(unittest.TestCase):
             run1 = self._process_mr_once(d1, "v1")
             removed_second = process.prune_measurereport_strata(
                 json.loads(json.dumps(run1)), MR_FIXTURE.name)
-            self.assertEqual(removed_second, 0)  # already clean after run 1
+            self.assertEqual(removed_second.removed, 0)  # already clean after run 1
 
             # A fresh run at a different version differs ONLY in provenance meta; the
             # clinical content (incl. the pruned stratifiers) is byte-identical.
